@@ -124,9 +124,12 @@ The DAW project saves the knobs on its own, independently of these files.
 
 ## Licences
 
-- **Code** — JUCE is used under its GPLv3 / commercial dual licence. Distributing
-  the binaries means complying with the GPLv3 (the complete corresponding
-  source must be available to whoever receives the plugin: this repository).
+- **Code** — JUCE is used under its **AGPLv3 / commercial dual licence**. As long as the
+  plugins are distributed under the AGPLv3, the complete corresponding source has to
+  travel with them: this public repository is that source, so the zips sent to
+  anybody must point back to it (the `LEGGIMI` inside every zip does). If the code
+  should ever stay closed or the plugins should be sold, a **commercial JUCE
+  licence** is required — the open source route does not allow that.
 - **Fonts** — SIL Open Font License, shipped inside each plugin
   (`Source/Fonts/OFL.txt`).
 - **SPAMPI-MODE samples** — the bundled recordings are **CC0** (public domain

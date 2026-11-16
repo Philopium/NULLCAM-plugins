@@ -64,4 +64,20 @@ Sono file di testo: puoi copiarli, fare un backup o mandarli a un amico.
 Nello zip trovi anche il file `LEGGIMI - installazione macOS.md` con i dettagli
 su come si usa il plugin.
 
+---
+
+## Licenza e codice sorgente
+
+**PLUGIN_NAME** è software libero: puoi usarlo, copiarlo e modificarlo secondo
+la **GNU Affero General Public License v3** (o una versione successiva). Il
+plugin è distribuito **senza garanzia** di alcun tipo.
+
+Il codice sorgente completo corrispondente a questo binario è pubblico qui:
+
+```
+https://github.com/Philopium/NULLCAM-plugins
+```
+
+(licenza completa: `https://www.gnu.org/licenses/agpl-3.0.html`)
+
 Buon divertimento!
