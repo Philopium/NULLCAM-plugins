@@ -28,7 +28,11 @@ for dir in PIER-MODE MAURI-MODE SPAMPI-MODE; do
         continue
     fi
 
-    for spec in "macos-13 x86_64" "macos-14 arm64"; do
+    # macOS 14 images were retired by GitHub on 2 November 2026, and the
+    # macOS 13 ones before that. These are the labels that exist today:
+    #   macos-15-intel -> Intel Mac (x86_64)
+    #   macos-15       -> Apple Silicon (arm64)
+    for spec in "macos-15-intel x86_64" "macos-15 arm64"; do
         # shellcheck disable=SC2086
         set -- $spec
         matrix_entries="${matrix_entries}${sep_matrix}{project:\"$dir\",target:\"${target}_VST3\",runner:\"$1\",arch:\"$2\"}"

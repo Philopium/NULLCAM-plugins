@@ -64,7 +64,7 @@ universal binary.
 .github/workflows/macos-vst3.yml
         │
         ├─ prepare   scans the plugins, builds the matrix (tools/scan-plugins.sh)
-        ├─ build     macos-13 (x86_64) + macos-14 (arm64), one job per plugin/arch
+        ├─ build     macos-15-intel (x86_64) + macos-15 (arm64), one job per plugin/arch
         └─ package   lipo → one universal .vst3 → ad-hoc codesign → zip
 ```
 

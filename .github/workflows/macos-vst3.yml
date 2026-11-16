@@ -83,7 +83,7 @@ jobs:
     name: package ${{ matrix.project }}
     needs: [prepare, build]
     if: always()
-    runs-on: macos-14
+    runs-on: macos-15
     strategy:
       fail-fast: false
       matrix:
