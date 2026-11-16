@@ -6,7 +6,7 @@ namespace
 {
 // The panel is a fixed card, like a pedal: everything is placed from these numbers.
 constexpr int kWidth = 700;
-constexpr int kHeight = 552;
+constexpr int kHeight = 568;
 constexpr int kMargin = 20;
 constexpr int kHeaderH = 82;
 constexpr int kPresetBarH = 32;
@@ -16,6 +16,7 @@ constexpr int kStageTitleH = 26;
 constexpr int kKnobCellH = 96;
 constexpr int kStageCaptionH = 20;
 constexpr int kBaseH = 46;
+constexpr int kLegalH = 14;
 
 constexpr int kMotionItem = 1;
 constexpr int kSortItem = 2;
@@ -689,7 +690,7 @@ void NullcamChainAudioProcessorEditor::paintBitReadout (juce::Graphics& g, const
 
 void NullcamChainAudioProcessorEditor::paintBaseplate (juce::Graphics& g)
 {
-    const auto area = juce::Rectangle<int> (0, getHeight() - kBaseH, getWidth(), kBaseH);
+    const auto area = juce::Rectangle<int> (0, getHeight() - kLegalH - kBaseH, getWidth(), kBaseH);
 
     if (area.isEmpty())
         return;
@@ -703,14 +704,26 @@ void NullcamChainAudioProcessorEditor::paintBaseplate (juce::Graphics& g)
     // used as artwork rather than as a label.
     const juce::String mark ("PIER-MODE");
 
-    juce::Graphics::ScopedSaveState clip (g);
-    g.reduceClipRegion (area);
+    {
+        juce::Graphics::ScopedSaveState clip (g);
+        g.reduceClipRegion (area);
 
-    g.setFont (lookAndFeel.shadeFont (48.0f));
-    g.setColour (PierLookAndFeel::acid().withAlpha (0.42f));
-    g.drawText (mark, area.translated (2, 2), juce::Justification::centred, false);
-    g.setColour (PierLookAndFeel::cream().withAlpha (0.30f));
-    g.drawText (mark, area, juce::Justification::centred, false);
+        g.setFont (lookAndFeel.shadeFont (48.0f));
+        g.setColour (PierLookAndFeel::acid().withAlpha (0.42f));
+        g.drawText (mark, area.translated (2, 2), juce::Justification::centred, false);
+        g.setColour (PierLookAndFeel::cream().withAlpha (0.30f));
+        g.drawText (mark, area, juce::Justification::centred, false);
+    }
+
+    // The legal notice the AGPLv3 asks for, printed on the thin strip under the
+    // band: the copyright, the licence, the absence of warranty and where the
+    // source code is.
+    const auto legal = juce::Rectangle<int> (0, area.getBottom(), getWidth(), kLegalH);
+
+    g.setFont (lookAndFeel.monoFont (7.5f));
+    g.setColour (PierLookAndFeel::dim().withAlpha (0.85f));
+    g.drawText ("(C) 2026 Philopium - AGPLv3 - no warranty - source: github.com/Philopium/NULLCAM-plugins",
+                legal.reduced (26, 1), juce::Justification::centredLeft, false);
 }
 
 void NullcamChainAudioProcessorEditor::paintScrews (juce::Graphics& g)

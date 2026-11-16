@@ -586,9 +586,23 @@ void MauriModeAudioProcessorEditor::paint (juce::Graphics& g)
     }
 
     paintGrid (g);
+    paintLegalNotice (g);
 
     g.setColour (MauriLookAndFeel::line());
     g.drawRect (getLocalBounds(), 1);
+}
+
+// The legal notice the AGPLv3 asks for, printed along the bottom edge: the
+// copyright, the licence, the absence of warranty and where the source is.
+void MauriModeAudioProcessorEditor::paintLegalNotice (juce::Graphics& g)
+{
+    const auto area = juce::Rectangle<int> (kMargin, getHeight() - 15,
+                                            getWidth() - 2 * kMargin, 12);
+
+    g.setFont (lookAndFeel.monoFont (7.0f));
+    g.setColour (MauriLookAndFeel::dim().withAlpha (0.55f));
+    drawTracked (g, "(C) 2026 Philopium - AGPLv3 - no warranty - source: github.com/Philopium/NULLCAM-plugins",
+                 area, 0.05f, juce::Justification::centredLeft);
 }
 
 void MauriModeAudioProcessorEditor::paintBackground (juce::Graphics& g)

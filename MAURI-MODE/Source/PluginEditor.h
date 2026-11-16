@@ -118,6 +118,7 @@ private:
     void paintCard (juce::Graphics&, const Card&);
     void paintScope (juce::Graphics&, const Card&);
     void paintGrid (juce::Graphics&);
+    void paintLegalNotice (juce::Graphics&);
 
     void paintSlicedImage (juce::Graphics&, const juce::Image&, juce::Rectangle<int>,
                            int bands, float opacity, int seed);
