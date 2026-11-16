@@ -73,11 +73,14 @@ jobs:
       - name: Build the plugin
         run: bash tools/build-macos.sh "${{ matrix.project }}" "${{ matrix.target }}" "${{ matrix.arch }}"
 
+      # Upload the whole `out` folder, not the .vst3 folder inside it: the
+      # artefact then keeps the name of the bundle, and the packaging job can
+      # rebuild the .vst3 tree exactly as it was.
       - name: Upload the bundle
         uses: actions/upload-artifact@v4
         with:
           name: bundle-${{ matrix.project }}-${{ matrix.arch }}
-          path: out/${{ matrix.project }}.vst3
+          path: out
           retention-days: 30
           if-no-files-found: error
 

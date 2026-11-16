@@ -69,3 +69,17 @@ comanda il tuo playing.
 `DYN PAT` sotto il 100% tiene il groove statico e lascia solo pochi gradi di
 variazione. Alzalo al 100% e suona con più dinamica: il `SENS` decide quanto viene
 letto il livello.
+
+## Licenza e codice sorgente
+
+MAURI-MODE è software libero: puoi usarlo, copiarlo e modificarlo secondo la
+**GNU Affero General Public License v3** (o una versione successiva). Il plugin è
+distribuito **senza garanzia** di alcun tipo.
+
+Il codice sorgente completo corrispondente a questo binario è pubblico qui:
+
+```
+https://github.com/Philopium/NULLCAM-plugins
+```
+
+(licenza completa: `https://www.gnu.org/licenses/agpl-3.0.html`)

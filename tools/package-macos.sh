@@ -15,12 +15,31 @@ OUT="${3:?output folder}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STAGE="$ROOT/build/package/$PROJECT"
 
-X86_BUNDLE="$RAW/bundle-$PROJECT-x86_64/$PROJECT.vst3"
-ARM_BUNDLE="$RAW/bundle-$PROJECT-arm64/$PROJECT.vst3"
+# The artefact upload either keeps the name of the .vst3 folder or strips it
+# away, depending on how the bundle was handed over. Accept both shapes, so
+# this script works with an old artefact and with a new one.
+bundle_root () {
+    local dir="$1"
+
+    if [ -d "$dir/$PROJECT.vst3/Contents" ]; then
+        printf '%s\n' "$dir/$PROJECT.vst3"
+        return 0
+    fi
+
+    if [ -d "$dir/Contents" ]; then
+        printf '%s\n' "$dir"
+        return 0
+    fi
+
+    return 1
+}
+
+X86_BUNDLE="$(bundle_root "$RAW/bundle-$PROJECT-x86_64" || true)"
+ARM_BUNDLE="$(bundle_root "$RAW/bundle-$PROJECT-arm64" || true)"
 
 for bundle in "$X86_BUNDLE" "$ARM_BUNDLE"; do
-    if [ ! -d "$bundle" ]; then
-        echo "ERROR: missing $bundle" >&2
+    if [ -z "$bundle" ]; then
+        echo "ERROR: missing the bundle for $PROJECT (looked in $RAW/bundle-$PROJECT-*)" >&2
         exit 1
     fi
 done
@@ -29,31 +48,50 @@ rm -rf "$STAGE"
 mkdir -p "$STAGE"
 ditto "$X86_BUNDLE" "$STAGE/$PROJECT.vst3"
 
-BIN="$(find "$STAGE/$PROJECT.vst3/Contents" -type f -name "$PROJECT.vst3" | head -1)"
+# The binary inside a macOS VST3 bundle lives in Contents/MacOS and carries the
+# plugin name without the .vst3 extension (PIER-MODE, not PIER-MODE.vst3).
+plugin_binary () {
+    find "$1/Contents/MacOS" -maxdepth 1 -type f -print -quit
+}
 
-if [ -z "$BIN" ]; then
+X86_BIN="$(plugin_binary "$X86_BUNDLE")"
+ARM_BIN="$(plugin_binary "$ARM_BUNDLE")"
+STAGE_BIN="$(plugin_binary "$STAGE/$PROJECT.vst3")"
+
+if [ -z "$X86_BIN" ] || [ -z "$ARM_BIN" ] || [ -z "$STAGE_BIN" ]; then
     echo "ERROR: cannot find the plugin binary inside the bundle" >&2
     exit 1
 fi
 
-lipo -create \
-    "$X86_BUNDLE/Contents/MacOS/$PROJECT.vst3" \
-    "$ARM_BUNDLE/Contents/MacOS/$PROJECT.vst3" \
-    -output "$BIN"
+echo "--- sources ---"
+echo "x86_64: $X86_BIN"
+echo "arm64:  $ARM_BIN"
+
+lipo -create "$X86_BIN" "$ARM_BIN" -output "$STAGE_BIN"
 
 echo "--- architectures ---"
-lipo -info "$BIN"
+lipo -info "$STAGE_BIN"
 
+# The per architecture signature is meaningless once the binary is glued
+# together: drop it and sign the finished bundle again.
+rm -rf "$STAGE/$PROJECT.vst3/Contents/_CodeSignature"
 codesign --force --deep --sign - "$STAGE/$PROJECT.vst3"
 
 # The friend facing instructions, with the plugin name filled in.
 sed "s/PLUGIN_NAME/$PROJECT/g" "$ROOT/tools/MAC-INSTALL.md" \
     > "$STAGE/LEGGIMI - installazione macOS.md"
 
+# The licence text travels with the binary, as the AGPLv3 asks for.
+cp "$ROOT/LICENSE.md" "$STAGE/LICENZA - AGPLv3.md"
+
 mkdir -p "$OUT"
+# An absolute path, because the zip is made from inside the staging folder.
+OUT="$(cd "$OUT" && pwd)"
 rm -f "$OUT/$PROJECT-macOS-VST3.zip"
 
 ( cd "$STAGE" && zip -r -y "$OUT/$PROJECT-macOS-VST3.zip" \
-    "$PROJECT.vst3" "LEGGIMI - installazione macOS.md" > /dev/null )
+    "$PROJECT.vst3" \
+    "LEGGIMI - installazione macOS.md" \
+    "LICENZA - AGPLv3.md" > /dev/null )
 
 echo ">>> $OUT/$PROJECT-macOS-VST3.zip"
