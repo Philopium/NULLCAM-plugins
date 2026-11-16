@@ -28,12 +28,14 @@ jobs:
       # The same script that is tested locally, so the workflow and the developer
       # always agree on what is ready to be built. A plugin without a CMakeLists.txt
       # or a plugin processor is skipped instead of breaking the whole matrix.
+      # The scripts are called through `bash` on purpose: the executable bit does
+      # not survive a checkout on every system.
       - id: scan
         run: |
           set -euo pipefail
           chmod +x tools/scan-plugins.sh
 
-          scan_output="$(./tools/scan-plugins.sh)"
+          scan_output="$(bash tools/scan-plugins.sh)"
           matrix="$(printf '%s\n' "$scan_output" | sed -n '1p')"
           projects="$(printf '%s\n' "$scan_output" | sed -n '2p')"
 
@@ -69,7 +71,7 @@ jobs:
           key: juce-v8-${{ matrix.arch }}
 
       - name: Build the plugin
-        run: ./tools/build-macos.sh "${{ matrix.project }}" "${{ matrix.target }}" "${{ matrix.arch }}"
+        run: bash tools/build-macos.sh "${{ matrix.project }}" "${{ matrix.target }}" "${{ matrix.arch }}"
 
       - name: Upload the bundle
         uses: actions/upload-artifact@v4
@@ -98,7 +100,7 @@ jobs:
           path: raw
 
       - name: Make the universal bundle and the zip
-        run: ./tools/package-macos.sh "${{ matrix.project }}" raw out
+        run: bash tools/package-macos.sh "${{ matrix.project }}" raw out
 
       - name: Upload the zip
         uses: actions/upload-artifact@v4
