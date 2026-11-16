@@ -1,0 +1,12 @@
+# The macOS runners build straight from this repository, so the shell scripts
+# and the workflow must stay LF even when the repository is edited on Windows.
+* text=auto eol=lf
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.wav binary
+*.ttf binary
+*.png binary
+*.vst3 binary
+*.zip binary

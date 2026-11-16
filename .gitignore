@@ -1,0 +1,8 @@
+build/
+out/
+dist/
+*.zip
+*.vst3
+.DS_Store
+.vscode/
+.idea/

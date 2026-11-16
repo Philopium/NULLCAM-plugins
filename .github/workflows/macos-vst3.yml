@@ -1,0 +1,109 @@
+name: macOS VST3
+
+# Builds the VST3 bundles for macOS on Apple's own build machines and packs
+# them as universal binaries (Apple Silicon + Intel), ready to be sent to
+# somebody. There is no macOS toolchain on the author's machine, so the build
+# happens here.
+#
+# Trigger it from the Actions tab, or by pushing to main.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    name: find plugins
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.scan.outputs.matrix }}
+      projects: ${{ steps.scan.outputs.projects }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # The same script that is tested locally, so the workflow and the developer
+      # always agree on what is ready to be built. A plugin without a CMakeLists.txt
+      # or a plugin processor is skipped instead of breaking the whole matrix.
+      - id: scan
+        run: |
+          set -euo pipefail
+          chmod +x tools/scan-plugins.sh
+
+          scan_output="$(./tools/scan-plugins.sh)"
+          matrix="$(printf '%s\n' "$scan_output" | sed -n '1p')"
+          projects="$(printf '%s\n' "$scan_output" | sed -n '2p')"
+
+          {
+              echo 'matrix<<EOF'
+              echo "$matrix"
+              echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          {
+              echo 'projects<<EOF'
+              echo "$projects"
+              echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          echo "matrix  = $matrix"
+          echo "projects = $projects"
+
+  build:
+    name: ${{ matrix.project }} ${{ matrix.arch }}
+    needs: prepare
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache JUCE
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/JUCE
+          key: juce-v8-${{ matrix.arch }}
+
+      - name: Build the plugin
+        run: ./tools/build-macos.sh "${{ matrix.project }}" "${{ matrix.target }}" "${{ matrix.arch }}"
+
+      - name: Upload the bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.project }}-${{ matrix.arch }}
+          path: out/${{ matrix.project }}.vst3
+          retention-days: 30
+          if-no-files-found: error
+
+  package:
+    name: package ${{ matrix.project }}
+    needs: [prepare, build]
+    if: always()
+    runs-on: macos-14
+    strategy:
+      fail-fast: false
+      matrix:
+        project: ${{ fromJSON(needs.prepare.outputs.projects) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download both architectures
+        uses: actions/download-artifact@v4
+        with:
+          pattern: bundle-${{ matrix.project }}-*
+          path: raw
+
+      - name: Make the universal bundle and the zip
+        run: ./tools/package-macos.sh "${{ matrix.project }}" raw out
+
+      - name: Upload the zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.project }}-macOS-VST3
+          path: out/${{ matrix.project }}-macOS-VST3.zip
+          retention-days: 90
+          if-no-files-found: error
