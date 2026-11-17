@@ -645,6 +645,25 @@ void SpampiModeAudioProcessorEditor::paintRecording (juce::Graphics& g)
 
     g.setGradientFill (SpampiLookAndFeel::rainbow (wave.toFloat()));
     g.fillPath (wavePath);
+
+    // The cut: the recording starts here, at its own loudest moment. Everything
+    // to the left is the run-up the note attack never plays.
+    if (sampleStartFraction > 0.001f)
+    {
+        const auto cutX = (float) wave.getX() + (float) wave.getWidth() * sampleStartFraction;
+
+        g.setColour (juce::Colour (0xff150d20).withAlpha (0.55f));
+        g.fillRect (juce::Rectangle<float> ((float) wave.getX(), (float) wave.getY(),
+                                            cutX - (float) wave.getX(), (float) wave.getHeight()));
+
+        g.setColour (SpampiLookAndFeel::accent (0));
+        g.drawLine (cutX, (float) wave.getY() + 3.0f, cutX, (float) wave.getBottom() - 3.0f, 1.6f);
+
+        g.setFont (lookAndFeel.bodyFont (7.0f));
+        g.setColour (SpampiLookAndFeel::accent (0));
+        g.drawText ("START", juce::Rectangle<int> ((int) cutX + 3, wave.getY() + 3, 34, 10),
+                    juce::Justification::centredLeft);
+    }
 }
 
 void SpampiModeAudioProcessorEditor::paintPitch (juce::Graphics& g)
@@ -1170,6 +1189,7 @@ void SpampiModeAudioProcessorEditor::pullLiveData()
         currentSampleIndex = index;
         currentSampleName = processor.getSampleName (index);
         processor.copySampleWaveform (waveform.data(), (int) waveform.size());
+        sampleStartFraction = processor.getSampleStartFraction();
         currentRoot = processor.getSampleMeasuredMidi (index);
         repaint (recordingArea);
     }

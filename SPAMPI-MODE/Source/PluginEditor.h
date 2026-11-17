@@ -136,6 +136,7 @@ private:
     // Live state, refreshed from the audio thread's atomics.
     std::array<float, 240> pitchTrace {};
     std::array<float, 240> waveform {};
+    float sampleStartFraction = 0.0f;   // where the recording is cut, 0..1
     float noteValue = -1.0f;
     float frequency = 0.0f;
     float confidence = 0.0f;

@@ -32,12 +32,18 @@ LEGGIMI - installazione.md   questo file
 
 1. Metti il plugin su una traccia e suona una nota: la registrazione (di default la
    scimmia) parte alla velocità di quella nota.
-2. `FOLLOW` al 100% = segue la nota esatta. Abbassalo per un nastro più indipendente.
-3. `ROOT` è la nota di riferimento della registrazione: quando cambi registrazione dal
+2. Ogni registrazione è tagliata nel suo punto di picco: il colpo parte dal suono vero
+   (l'urlo, l'abbaio, lo scarico), non dal silenzio prima. La linea `START` sulla forma
+   d'onda è il punto da cui parte, e l'attacco della nota cade lì.
+3. Con `TRIGGER` su `SHOT` (il default) senti **un colpo per nota**: la registrazione
+   suona una volta e poi tace. Per farla ripartire lascia andare la nota. Se vuoi il
+   nastro che gira di continuo, metti `LOOP`.
+4. `FOLLOW` al 100% = segue la nota esatta. Abbassalo per un nastro più indipendente.
+5. `ROOT` è la nota di riferimento della registrazione: quando cambi registrazione dal
    box `SAMPLE` si riallinea da sola alla nota misurata.
-4. Se non sente niente, alza `LEVEL`, verifica `MIX` al 100% e `TRIGGER` (in `GATE`
+6. Se non sente niente, alza `LEVEL`, verifica `MIX` al 100% e `TRIGGER` (in `GATE`
    suona solo mentre c'è una nota).
-5. `SENS` è la soglia: alzala se il rumore di fondo apre il gate, abbassala se le note
+7. `SENS` è la soglia: alzala se il rumore di fondo apre il gate, abbassala se le note
    morbide non vengono prese.
 
 Non serve nessun routing MIDI: l'ingresso audio della traccia è già l'informazione che
@@ -80,6 +86,14 @@ dentro) e riavvia/riscansiona la DAW.
 Alza `LEVEL`, metti `MIX` al 100%, `FOLLOW` sopra 0%. Se `TRIGGER` è su `GATE`, deve
 esserci una nota in ingresso. Attento: in Ableton il plugin va su una traccia con
 ingresso audio attivo (se è una traccia MIDI vuota non ha nulla da ascoltare).
+
+**Suona una volta e poi basta.**
+È `SHOT`, ed è il comportamento giusto: un colpo per nota. Lascia andare la nota (o
+cambiala) e riparte. Se vuoi che continui, scegli `LOOP`.
+
+**Non sento l'inizio del suono.**
+La registrazione è tagliata nel suo punto di picco, quindi il "prima" non viene suonato:
+è voluto. La linea `START` sulla forma d'onda mostra dove comincia.
 
 **La nota che legge è sbagliata o salta di ottava.**
 Suona note pulite, una alla volta: il detector lavora su 2048 campioni. Abbassa

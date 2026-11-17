@@ -102,6 +102,10 @@ public:
     // A decimated peek at the selected recording, for the waveform display.
     bool copySampleWaveform (float* dest, int count) const;
 
+    // Where the selected recording is cut, as a 0..1 position, so the panel can
+    // draw the peak the note attack lands on.
+    float getSampleStartFraction() const;
+
     // Display only: the pitch history the panel draws as a trace.
     bool copyPitchHistory (float* dest, int count) const;
 

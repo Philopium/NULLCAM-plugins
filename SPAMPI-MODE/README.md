@@ -26,9 +26,16 @@ Sotto il cofano:
 |---|---|
 | pitch detection | autocorrelazione via FFT (YIN), finestra 2048 campioni, hop 256, 65-1600 Hz, interpolazione parabolica |
 | playback | fase frazionaria + Hermite a 4 punti, glide esponenziale |
-| modalità | `LOOP` (il nastro gira), `GATE` (suona solo mentre c'è nota), `TRIG` (riparte da capo ad ogni cambio di nota) |
+| attacco | la registrazione viene **tagliata nel suo punto di picco**: la nota parte lì, non dall'inizio del file |
+| modalità | `SHOT` (un colpo per nota, tagliato sul picco, suona una volta), `LOOP` (il nastro gira), `GATE` (suona solo mentre c'è nota), `TRIG` (riparte da capo ad ogni cambio di nota) |
 | MACHINE | drive + soft clip + bitcrush + grit |
 | latenza | nessun buffer di ritardo: la nota viene misurata sull'ingresso, il sample parte subito |
+
+Ogni registrazione viene analizzata quando la carichi: il plugin trova la finestra più
+forte (20 ms) e segna quel punto come **inizio**. La forma d'onda nel pannello mostra il
+taglio con la linea `START`: tutto quello che sta a sinistra è la sala, il respiro, il
+silenzio prima del suono, e non viene suonato. Così l'attacco della nota cade sul picco
+del sample (l'urlo, l'abbaio, lo scarico) e non su mezzo secondo di niente.
 
 ## I controlli
 
@@ -45,7 +52,16 @@ Sotto il cofano:
 
 **INTERVAL** - trasposizione fissa da -24 a +24 semitoni, somma al follow.
 
-**TRIGGER** - `LOOP`, `GATE`, `TRIG`.
+**TRIGGER** - `SHOT` (default), `LOOP`, `GATE`, `TRIG`.
+
+- `SHOT` - **una nota, un colpo**. Ogni attacco fa partire la registrazione dal punto di
+  picco, una volta sola; quando il sample finisce, silenzio. La velocità viene decisa
+  sull'attacco e resta ferma per tutto il colpo: si sente un animale che suona, non un
+  nastro che si allunga. Per far ripartire il colpo devi lasciare andare la nota (o
+  cambiarla).
+- `LOOP` - il nastro gira senza fine e la velocità lo piega di continuo.
+- `GATE` - suona solo mentre l'ingresso è sopra la soglia.
+- `TRIG` - riparte dal picco ad ogni cambio di nota.
 
 **SPREAD** - probabilità che una nota venga spostata di un'ottava (su o giù) per
 rompere la monotonia: 0% sempre lineare, 100% sempre imprevedibile.
@@ -64,9 +80,9 @@ rompere la monotonia: 0% sempre lineare, 100% sempre imprevedibile.
 
 **LEVEL** - gain finale.
 
-Il pannello mostra anche: la forma d'onda della registrazione scelta, la nota che sta
-sentendo in grande con Hz e cents, la barra di confidenza, il rate di riproduzione, e
-una traccia delle ultime note come nastro rainbow.
+Il pannello mostra anche: la forma d'onda della registrazione scelta con la linea `START`
+dove il sample viene tagliato, la nota che sta sentendo in grande con Hz e cents, la barra
+di confidenza, il rate di riproduzione, e una traccia delle ultime note come nastro rainbow.
 
 ## Preset
 
@@ -124,7 +140,7 @@ build\Release\spampi_dsp_test.exe
 
 Controlla il follower e il motore senza host: E2/D3/A3/E4/E5 misurate, rate che segue
 la nota, FOLLOW a zero, INTERVAL, gate, note event, soft clip, mute, MIX 0 come
-passthrough, resample, helper del pannello.
+passthrough, resample, taglio sul picco, SHOT che suona una volta sola, helper del pannello.
 
 Per vedere il pannello senza DAW (e verificare campioni, preset e importazione):
 

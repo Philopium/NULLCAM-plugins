@@ -89,7 +89,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SpampiModeAudioProcessor::cr
     add (ids::machine, "MACHINE", juce::NormalisableRange<float> (0.0f, 1.0f), 0.20f);
 
     // How it is triggered, and how it sounds.
-    add (ids::trigger, "TRIGGER", juce::NormalisableRange<float> (0.0f, 2.0f, 1.0f), 0.0f);
+    add (ids::trigger, "TRIGGER", juce::NormalisableRange<float> (0.0f, 3.0f, 1.0f), 0.0f);
     add (ids::sens, "SENS", juce::NormalisableRange<float> (0.0f, 1.0f), 0.55f);
     add (ids::tone, "TONE", juce::NormalisableRange<float> (0.0f, 1.0f), 0.85f);
     add (ids::mix, "MIX", juce::NormalisableRange<float> (0.0f, 1.0f), 1.0f);
@@ -115,15 +115,16 @@ const PresetValues& presetValues (SpampiModeAudioProcessor::Preset preset)
 {
     static const PresetValues table[] = {
         // sample, follow, interval, spread, glide, drift, machine, trig, sens, tone, mix, level
+        // trig: 0 = SHOT (one hit per note, cut at the peak), 1 = LOOP, 2 = GATE, 3 = TRIG
         { 0,  1.0f,  0.0f, 0.35f, 0.08f, 0.15f, 0.25f, 0, 0.60f, 0.90f, 1.0f, 0.85f },  // MONKEY
         { 1,  1.0f,  7.0f, 0.00f, 0.30f, 0.35f, 0.15f, 0, 0.55f, 0.85f, 1.0f, 0.80f },  // WEE-OO
         { 2,  1.0f,  5.0f, 0.50f, 0.04f, 0.05f, 0.35f, 2, 0.62f, 0.88f, 1.0f, 0.82f },  // BABY
         { 3,  1.0f,  0.0f, 1.00f, 0.00f, 0.00f, 0.50f, 2, 0.60f, 0.92f, 1.0f, 0.88f },  // MEOW STACK
-        { 4,  1.0f, -5.0f, 0.50f, 0.02f, 0.00f, 0.40f, 1, 0.58f, 0.80f, 1.0f, 0.90f },  // GOOD BOY
-        { 5,  0.0f,  0.0f, 1.00f, 0.00f, 0.60f, 0.60f, 0, 0.50f, 0.70f, 1.0f, 0.75f },  // FLUSH
-        { 6,  1.0f, -12.0f, 0.00f, 0.40f, 0.20f, 0.25f, 0, 0.55f, 0.75f, 1.0f, 0.85f },  // NIGHT TRAIN
+        { 4,  1.0f, -5.0f, 0.50f, 0.02f, 0.00f, 0.40f, 0, 0.58f, 0.80f, 1.0f, 0.90f },  // GOOD BOY
+        { 5,  0.0f,  0.0f, 1.00f, 0.00f, 0.60f, 0.60f, 1, 0.50f, 0.70f, 1.0f, 0.75f },  // FLUSH
+        { 6,  1.0f, -12.0f, 0.00f, 0.40f, 0.20f, 0.25f, 1, 0.55f, 0.75f, 1.0f, 0.85f },  // NIGHT TRAIN
         { 7,  0.4f,  3.0f, 0.70f, 0.03f, 0.10f, 0.70f, 2, 0.58f, 0.86f, 1.0f, 0.80f },  // EVIL LAUGH
-        { 8,  1.0f,  0.0f, 0.10f, 0.10f, 0.05f, 0.30f, 1, 0.52f, 0.95f, 1.0f, 0.85f },  // TRUMPET
+        { 8,  1.0f,  0.0f, 0.10f, 0.10f, 0.05f, 0.30f, 0, 0.52f, 0.95f, 1.0f, 0.85f },  // TRUMPET
         { 9,  1.0f, -7.0f, 0.60f, 0.05f, 0.10f, 0.20f, 2, 0.60f, 0.82f, 1.0f, 0.90f },  // MOO
         { 10, 1.0f,  2.0f, 0.40f, 0.02f, 0.00f, 0.35f, 2, 0.62f, 0.90f, 1.0f, 0.86f },  // ROOSTER
         { 11, 0.0f, -12.0f, 1.00f, 0.00f, 0.30f, 0.80f, 0, 0.50f, 0.60f, 1.0f, 0.72f }   // SPAM
@@ -370,6 +371,10 @@ bool SpampiModeAudioProcessor::loadSampleFromMemory (const char* data, int size,
     if (entry->sample.data.empty())
         return false;
 
+    // Playback starts at the recording's own loudest moment, so the note attack
+    // lands on the sound a person recognises instead of the room before it.
+    entry->sample.startSample = spampi::peakStartOf (entry->sample.data, hostSampleRate);
+
     samples.push_back (std::move (entry));
     return true;
 }
@@ -606,6 +611,7 @@ void SpampiModeAudioProcessor::resampleAllTo (double sampleRate)
         entry->sample.baseFrequency = entry->measuredMidi >= 0
             ? (double) spampi::PitchDetector::frequencyFromMidi ((float) entry->measuredMidi)
             : 0.0;
+        entry->sample.startSample = spampi::peakStartOf (entry->sample.data, sampleRate);
     }
 }
 
@@ -643,6 +649,27 @@ bool SpampiModeAudioProcessor::copySampleWaveform (float* dest, int count) const
     }
 
     return true;
+}
+
+float SpampiModeAudioProcessor::getSampleStartFraction() const
+{
+    const juce::SpinLock::ScopedTryLockType lock (sampleLock);
+
+    if (! lock.isLocked())
+        return 0.0f;
+
+    const auto index = currentSampleIndex.load (std::memory_order_relaxed);
+
+    if (index < 0 || index >= (int) samples.size())
+        return 0.0f;
+
+    const auto& sample = samples[(std::size_t) index]->sample;
+
+    if (sample.data.empty())
+        return 0.0f;
+
+    return juce::jlimit (0.0f, 1.0f,
+                         (float) sample.startSample / (float) sample.data.size());
 }
 
 //==============================================================================

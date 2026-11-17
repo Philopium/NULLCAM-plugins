@@ -489,25 +489,62 @@ struct Sample
     std::vector<float> data;     // mono, at the host sample rate
     double baseFrequency = 0.0;  // measured pitch of the recording, 0 if unknown
     std::string name;            // only used by the plugin layer
+
+    // Where playback starts: the recording's own loudest moment. A howl, a bark
+    // or a flush begins with the sound a person recognises, not with the room
+    // tone before it, so the attack of the note lands on the good part.
+    std::size_t startSample = 0;
 };
+
+// Finds the loudest point of a recording: the start of its loudest short
+// window. That is where playback begins, so the recording is cut at its peak
+// and the attack of the note lands exactly on the sound a person recognises.
+inline std::size_t peakStartOf (const std::vector<float>& data, double sampleRate) noexcept
+{
+    if (data.empty())
+        return 0;
+
+    const auto window = (std::size_t) std::max (1.0, sampleRate * 0.02);
+
+    double bestEnergy = -1.0;
+    std::size_t bestStart = 0;
+
+    for (std::size_t start = 0; start + window <= data.size(); start += window)
+    {
+        double energy = 0.0;
+
+        for (std::size_t i = start; i < start + window; ++i)
+            energy += double (data[i]) * double (data[i]);
+
+        if (energy > bestEnergy)
+        {
+            bestEnergy = energy;
+            bestStart = start;
+        }
+    }
+
+    return bestStart;
+}
 
 //==============================================================================
 // How the sample is triggered.
 enum class TriggerMode
 {
-    loop = 0,   // runs forever, the pitch bends it continuously
-    gate = 1,   // only sounds while the input is above the gate
-    trig = 2    // restarts from the top every time the detected note changes
+    shot = 0,   // one note, one hit: starts at the peak on the attack, plays once
+    loop = 1,   // runs forever, the pitch bends it continuously
+    gate = 2,   // only sounds while the input is above the gate
+    trig = 3    // restarts from the top every time the detected note changes
 };
 
 inline const char* triggerModeName (int mode) noexcept
 {
     switch (mode)
     {
-        case 0:  return "LOOP";
-        case 1:  return "GATE";
-        case 2:  return "TRIG";
-        default: return "LOOP";
+        case 0:  return "SHOT";
+        case 1:  return "LOOP";
+        case 2:  return "GATE";
+        case 3:  return "TRIG";
+        default: return "SHOT";
     }
 }
 
@@ -605,6 +642,20 @@ public:
         // ended on a note.
         auto loudEnough = false;
 
+        // Modes: 0 = SHOT (one hit per note), 1 = LOOP, 2 = GATE, 3 = TRIG.
+        const auto mode = s.triggerMode;
+        const auto oneShot = mode == 0;
+
+        // A hit needs the input to have gone quiet first, otherwise a held note
+        // with a wobbling level would machine-gun the recording.
+        const auto rearmSamples = int (0.012 * sr);
+
+        // A very short fade at the start and at the end of a hit: cutting a
+        // recording at its peak is what makes the attack land there, and this
+        // keeps that cut from clicking.
+        const auto attackStep = 1.0f - std::exp (-1.0 / (0.0015 * sr));
+        const auto releaseFadeSamples = 0.010 * sr;
+
         for (int i = 0; i < numSamples; ++i)
         {
             const auto in = input != nullptr ? input[i] : 0.0f;
@@ -617,39 +668,64 @@ public:
             const auto rms = detector.getRms();
             loudEnough = rms >= gateThreshold && confidence >= confidenceNeeded;
 
+            // ---- the attack ------------------------------------------------------
+            const auto events = detector.getNoteEvents();
+            const auto noteChanged = events != lastNoteEvents;
+
+            auto attack = false;
+            auto freshAttack = false;
+
+            if (loudEnough)
+            {
+                if (! wasLoud && quietSamples >= rearmSamples)
+                {
+                    attack = true;
+                    freshAttack = true;
+                }
+
+                // A slurred note is a new attack as well, but it keeps the glide.
+                if (noteChanged)
+                    attack = true;
+
+                wasLoud = true;
+                quietSamples = 0;
+            }
+            else
+            {
+                wasLoud = false;
+
+                if (quietSamples < rearmSamples * 4)
+                    ++quietSamples;
+            }
+
+            lastNoteEvents = events;
+
             // ---- target playback rate -------------------------------------------
-            auto target = 1.0f;
+            auto base = 1.0f;
 
             if (loudEnough && hz > 0.0f)
             {
                 const auto detectedMidi = PitchDetector::midiFromFrequency (hz);
                 const auto followed = s.root + (detectedMidi - s.root) * std::clamp (s.follow, 0.0f, 1.0f);
-                target = std::pow (2.0f, (followed - s.root + s.interval) / 12.0f);
+                base = std::pow (2.0f, (followed - s.root + s.interval) / 12.0f);
             }
             else
             {
-                target = std::pow (2.0f, s.interval / 12.0f);
+                base = std::pow (2.0f, s.interval / 12.0f);
             }
 
-            // The random octave jump is re-rolled on every new note: this is
-            // the signature wobble of the machine.
-            const auto events = detector.getNoteEvents();
-
-            if (events != lastNoteEvents)
+            // The random octave jump is re-rolled on every hit: this is the
+            // signature wobble of the machine.
+            if (attack)
             {
-                lastNoteEvents = events;
+                const auto spreadOctaves = int (std::lround (std::clamp (s.spread, 0.0f, 1.0f) * 3.0f));
+                randomOctave = 0;
 
-                if (loudEnough)
+                if (spreadOctaves > 0)
                 {
-                    const auto spreadOctaves = int (std::lround (std::clamp (s.spread, 0.0f, 1.0f) * 3.0f));
-                    randomOctave = 0;
-
-                    if (spreadOctaves > 0)
-                    {
-                        const auto roll = (float) std::rand() / (float) RAND_MAX;
-                        randomOctave = int (std::lround ((roll * 2.0f - 1.0f) * float (spreadOctaves)));
-                        randomOctave = std::clamp (randomOctave, -spreadOctaves, spreadOctaves);
-                    }
+                    const auto roll = (float) std::rand() / (float) RAND_MAX;
+                    randomOctave = int (std::lround ((roll * 2.0f - 1.0f) * float (spreadOctaves)));
+                    randomOctave = std::clamp (randomOctave, -spreadOctaves, spreadOctaves);
                 }
             }
 
@@ -663,16 +739,36 @@ public:
                                   * std::sin (driftPhase * 6.2831853f);
             const auto octaveSemis = float (randomOctave) * 12.0f;
 
-            target *= std::pow (2.0f, (driftSemis + octaveSemis) / 12.0f);
-            target = std::clamp (target, 0.02f, 24.0f);
+            const auto commandRate = std::clamp (
+                base * std::pow (2.0f, (driftSemis + octaveSemis) / 12.0f), 0.02f, 24.0f);
 
-            targetRate = target;
+            if (oneShot)
+            {
+                // The recording is a note, not a tape: the speed is decided when
+                // the string is hit and then it stays put for the whole sound.
+                if (attack)
+                {
+                    if (freshAttack)
+                        currentRate = commandRate;
+                    else
+                        currentRate = currentRate + (commandRate - currentRate) * glideCoef;
 
-            // Portamento towards the new rate.
-            currentRate = currentRate + (targetRate - currentRate) * glideCoef;
+                    if (hasSample)
+                    {
+                        phase = (double) currentSample->startSample;
+                        playing = true;
+                        attackGain = 0.0f;
+                    }
+                }
+            }
+            else
+            {
+                targetRate = commandRate;
+                currentRate = currentRate + (targetRate - currentRate) * glideCoef;
 
-            if (currentRate < 0.02f)
-                currentRate = 0.02f;
+                if (currentRate < 0.02f)
+                    currentRate = 0.02f;
+            }
 
             // ---- sample playback ------------------------------------------------
             float wet = 0.0f;
@@ -682,35 +778,54 @@ public:
                 const auto& data = currentSample->data;
                 const auto size = (double) data.size();
 
-                if (phase >= size)
-                    phase = 0.0;
-
-                wet = hermiteRead (data, phase);
-                phase += currentRate;
-
-                if (phase >= size)
-                    phase -= size;
-
-                // Trigger modes.
-                if (s.triggerMode == 1)   // GATE
+                if (! oneShot)
                 {
-                    const auto target2 = loudEnough ? 1.0f : 0.0f;
-                    envelope += (target2 - envelope) * 0.002f;
+                    const auto start = (double) currentSample->startSample;
+
+                    if (phase >= size || phase < start)
+                        phase = start + (size > start ? std::fmod (phase - start, size - start) : 0.0);
+
+                    if (mode == 3 && attack)          // TRIG: start again on every hit
+                        phase = start;
+
+                    wet = hermiteRead (data, phase);
+                    phase += currentRate;
+
+                    if (mode == 2)                    // GATE: only while a note is held
+                        envelope += ((loudEnough ? 1.0f : 0.0f) - envelope) * 0.002f;
+                    else
+                        envelope += (1.0f - envelope) * 0.002f;
                 }
-                else if (s.triggerMode == 2)   // TRIG
+                else if (playing)
                 {
-                    if (events != lastTriggerEvent)
+                    if (phase < size)
                     {
-                        lastTriggerEvent = events;
-                        phase = 0.0;
-                    }
+                        wet = hermiteReadClamped (data, phase);
+                        phase += currentRate;
 
-                    envelope += (1.0f - envelope) * 0.002f;
+                        attackGain += (1.0f - attackGain) * attackStep;
+                        wet *= attackGain;
+
+                        // ...and a short fade at the end, so a recording that
+                        // stops abruptly does not click.
+                        const auto remaining = size - phase;
+
+                        if (remaining < releaseFadeSamples)
+                            wet *= (float) std::max (0.0, remaining / releaseFadeSamples);
+
+                        if (phase >= size)
+                            playing = false;
+
+                        envelope = 1.0f;
+                    }
+                    else
+                    {
+                        playing = false;
+                    }
                 }
-                else   // LOOP
-                {
-                    envelope += (1.0f - envelope) * 0.002f;
-                }
+
+                if (oneShot && ! playing)
+                    envelope += (0.0f - envelope) * 0.002f;
             }
             else
             {
@@ -781,9 +896,12 @@ public:
 private:
     void resetSamplePlayback() noexcept
     {
-        phase = 0.0;
+        phase = currentSample != nullptr ? (double) currentSample->startSample : 0.0;
         envelope = 0.0f;
-        lastTriggerEvent = -1;
+        playing = false;
+        attackGain = 0.0f;
+        wasLoud = false;
+        quietSamples = 1 << 20;   // the very first note counts as an attack
     }
 
     double sr = 48000.0;
@@ -793,9 +911,12 @@ private:
     float driftPhase = 0.0f;
     float toneState = 0.0f;
     float envelope = 0.0f;
+    float attackGain = 0.0f;
+    bool playing = false;
+    bool wasLoud = false;
+    int quietSamples = 0;
     int randomOctave = 0;
     int lastNoteEvents = 0;
-    int lastTriggerEvent = -1;
 
     Settings settings;
     const Sample* currentSample = nullptr;

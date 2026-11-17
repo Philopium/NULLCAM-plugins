@@ -88,7 +88,7 @@ spampi::Settings baseSettings()
     s.glide = 0.0f;
     s.drift = 0.0f;
     s.machine = 0.0f;
-    s.triggerMode = 0;     // LOOP
+    s.triggerMode = 1;     // LOOP: the simplest way to watch the rate follow a note
     s.sens = 0.55f;
     s.tone = 1.0f;
     s.mix = 1.0f;
@@ -212,7 +212,7 @@ int main()
         engine.setSample (&sample);
 
         auto settings = baseSettings();
-        settings.triggerMode = 1;   // GATE
+        settings.triggerMode = 2;   // GATE
         engine.setSettings (settings);
 
         const auto output = play (engine, silence (0.5));
@@ -313,11 +313,110 @@ int main()
     }
 
     //--------------------------------------------------------------------------
-    // 10. The helpers the panel uses.
+    // 10. The recording is cut at its loudest moment.
+    {
+        auto clip = silence (0.30);
+        const auto body = pluck (220.0, 0.5, 0.5f);
+        clip.insert (clip.end(), body.begin(), body.end());
+
+        const auto start = spampi::peakStartOf (clip, kRate);
+
+        expect (start >= (std::size_t) (0.29 * kRate) && start <= (std::size_t) (0.32 * kRate),
+                "silence in front of a sound is skipped: playback starts at the peak");
+
+        expect (spampi::peakStartOf ({}, kRate) == 0, "an empty recording starts at zero");
+    }
+
+    //--------------------------------------------------------------------------
+    // 11. SHOT: one attack, one hit, starting on the peak and playing once.
+    {
+        auto sample = spampi::Sample();
+        auto data = silence (0.30);
+        const auto body = pluck (220.0, 0.10, 0.5f);
+        data.insert (data.end(), body.begin(), body.end());
+        sample.data = std::move (data);
+        sample.baseFrequency = 220.0;
+        sample.name = "short";
+        sample.startSample = spampi::peakStartOf (sample.data, kRate);
+
+        spampi::Engine engine;
+        engine.prepare (kRate);
+        engine.setSample (&sample);
+
+        auto settings = baseSettings();
+        settings.triggerMode = 0;   // SHOT
+        engine.setSettings (settings);
+
+        auto input = silence (0.05);
+        auto first = pluck (220.0, 0.10, 0.5f);
+        input.insert (input.end(), first.begin(), first.end());
+        auto gap = silence (0.15);
+        input.insert (input.end(), gap.begin(), gap.end());
+        auto second = pluck (220.0, 0.10, 0.5f);
+        input.insert (input.end(), second.begin(), second.end());
+        auto tail = silence (0.90);
+        input.insert (input.end(), tail.begin(), tail.end());
+
+        const auto output = play (engine, input);
+
+        // Onsets: a run of quiet blocks followed by a loud one.
+        auto onsets = 0;
+        auto quiet = true;
+
+        for (std::size_t i = 0; i + 480 < output.size(); i += 480)
+        {
+            auto peak = 0.0f;
+
+            for (std::size_t j = i; j < i + 480; ++j)
+                peak = std::max (peak, std::abs (output[j]));
+
+            if (quiet && peak > 0.05f)
+            {
+                ++onsets;
+                quiet = false;
+            }
+            else if (! quiet && peak < 0.01f)
+            {
+                quiet = true;
+            }
+        }
+
+        expect (onsets == 2, "SHOT fires once per attack, not once per block");
+
+        auto endPeak = 0.0f;
+
+        for (std::size_t i = (std::size_t) (0.85 * kRate); i < output.size(); ++i)
+            endPeak = std::max (endPeak, std::abs (output[i]));
+
+        expect (endPeak < 1.0e-4f, "SHOT plays the recording once and then stops");
+
+        // The same input in LOOP keeps sounding after the note has gone.
+        spampi::Engine loopEngine;
+        loopEngine.prepare (kRate);
+        loopEngine.setSample (&sample);
+
+        auto loopSettings = baseSettings();
+        loopSettings.triggerMode = 1;   // LOOP
+        loopEngine.setSettings (loopSettings);
+
+        const auto loopOutput = play (loopEngine, input);
+
+        auto loopEndPeak = 0.0f;
+
+        for (std::size_t i = (std::size_t) (0.85 * kRate); i < loopOutput.size(); ++i)
+            loopEndPeak = std::max (loopEndPeak, std::abs (loopOutput[i]));
+
+        expect (loopEndPeak > 1.0e-3f, "LOOP keeps going where SHOT has already stopped");
+    }
+
+    //--------------------------------------------------------------------------
+    // 12. The helpers the panel uses.
     {
         expect (std::string (spampi::noteLabel (60)) == "C4", "note 60 is C4");
         expect (std::string (spampi::noteLabel (-1)) == "--", "no note prints as --");
-        expect (std::string (spampi::triggerModeName (2)) == "TRIG", "trigger mode 2 is TRIG");
+        expect (std::string (spampi::triggerModeName (0)) == "SHOT", "trigger mode 0 is SHOT");
+        expect (std::string (spampi::triggerModeName (2)) == "GATE", "trigger mode 2 is GATE");
+        expect (std::string (spampi::triggerModeName (3)) == "TRIG", "trigger mode 3 is TRIG");
     }
 
     if (failures == 0)
