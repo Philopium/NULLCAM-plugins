@@ -601,6 +601,10 @@ public:
             ? std::exp (-1.0 / (glideSeconds * float (sr)))
             : 0.0f;
 
+        // Kept outside the loop so the panel still knows whether the last block
+        // ended on a note.
+        auto loudEnough = false;
+
         for (int i = 0; i < numSamples; ++i)
         {
             const auto in = input != nullptr ? input[i] : 0.0f;
@@ -611,7 +615,7 @@ public:
             const auto hz = detector.getFrequency();
             const auto confidence = detector.getConfidence();
             const auto rms = detector.getRms();
-            const auto loudEnough = rms >= gateThreshold && confidence >= confidenceNeeded;
+            loudEnough = rms >= gateThreshold && confidence >= confidenceNeeded;
 
             // ---- target playback rate -------------------------------------------
             auto target = 1.0f;

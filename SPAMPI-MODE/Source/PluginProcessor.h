@@ -1,5 +1,6 @@
 #pragma once
 
+#include <juce_audio_formats/juce_audio_formats.h>
 #include <juce_audio_processors/juce_audio_processors.h>
 
 #include "SpampiEngine.h"
@@ -81,6 +82,7 @@ public:
     // dropped into the user sample folder.
     int getNumSamples() const noexcept { return (int) samples.size(); }
     juce::String getSampleName (int index) const;
+    juce::StringArray getSampleNames() const;
     int getSampleIndexForPath (const juce::String& path) const;
     juce::String getSamplePath (int index) const;
     int getSampleIndexForName (const juce::String& name) const;
@@ -92,6 +94,13 @@ public:
     // Returns the new index, or -1 on failure.
     int importUserSample (const juce::File& source);
     void refreshUserSamples();
+
+    // Called by the panel when the player picks a recording: the root snaps to
+    // the pitch the recording was measured at, so the machine starts in tune.
+    void sampleChosenByUser();
+
+    // A decimated peek at the selected recording, for the waveform display.
+    bool copySampleWaveform (float* dest, int count) const;
 
     // Display only: the pitch history the panel draws as a trace.
     bool copyPitchHistory (float* dest, int count) const;
@@ -106,6 +115,8 @@ public:
     int getCurrentSampleIndex() const noexcept { return currentSampleIndex.load(); }
 
 private:
+    struct SampleEntry;
+
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     void setParam (const char* id, float value);
 
@@ -114,6 +125,8 @@ private:
     bool loadSampleFromMemory (const char* data, int size, const juce::String& displayName);
     bool decodeToMono (juce::AudioFormatReader* reader, std::vector<float>& out, double& rate);
     void applySampleIndex();
+    void publishSamples();
+    int measuredMidiOf (const SampleEntry& entry) const;
     void resampleAllTo (double sampleRate);
 
     spampi::Engine engine;
@@ -133,12 +146,32 @@ private:
     // thread holds a raw pointer to the sample it is playing.
     std::vector<std::unique_ptr<SampleEntry>> samples;
 
+    // The audio thread never touches the list itself, only these slots. The
+    // message thread publishes a pointer per sample, so adding a recording
+    // while the plugin is playing can never make the audio thread read a
+    // vector that is being resized.
+    static constexpr int kMaxSamples = 64;
+    std::array<std::atomic<spampi::Sample*>, kMaxSamples> sampleSlots {};
+    std::atomic<int> sampleCount { 0 };
+
+    // Held while the list itself is changed: loading, importing, resampling.
+    mutable juce::SpinLock sampleLock;
+
     std::atomic<int> requestedIndex { 0 };
     std::atomic<int> currentSampleIndex { -1 };
     std::atomic<float> pendingAutoRoot { -1.0f };
 
+    // Message thread only: set while a preset or a session is being restored,
+    // so the root a preset asked for is not overwritten by the measurement.
+    bool suppressAutoRoot = false;
+
+    // Audio thread only: the sample the engine is actually playing.
+    int audioSampleIndex = -1;
+    const spampi::Sample* audioSample = nullptr;
+
     double hostSampleRate = 48000.0;
     std::vector<float> monoInput, monoOutput;
+    juce::StringArray loadedUserPaths;
 
     mutable juce::SpinLock scopeLock;
     std::array<float, 256> pitchHistory {};
