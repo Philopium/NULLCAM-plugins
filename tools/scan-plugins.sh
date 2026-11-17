@@ -15,7 +15,7 @@ projects=""
 sep_matrix=""
 sep_projects=""
 
-for dir in PIER-MODE MAURI-MODE SPAMPI-MODE; do
+for dir in PIER-MODE MAURI-MODE SPAMPI-MODE GIANNIS-MODE; do
     if [ ! -f "$dir/CMakeLists.txt" ] || [ ! -f "$dir/Source/PluginProcessor.cpp" ]; then
         echo "::notice::skipping $dir (not ready yet)" >&2
         continue
