@@ -78,13 +78,33 @@ public:
 
     const echomatrix::Snapshot& getSnapshot() const noexcept { return engine.getSnapshot(); }
 
-    // Called by the editor when the host provides a new BPM (tempo sync).
-    void setHostBpm (double bpm) noexcept { engine.setBpm (bpm); }
 private:
     static juce::AudioProcessorValueTreeState::ParameterLayout createLayout();
     void setParam (const juce::String& id, float value);
 
+    // The raw values of every parameter, resolved once. The audio thread only
+    // reads them with an atomic load: no String, no allocation, no lock.
+    struct ValuePointers
+    {
+        std::atomic<float>* delayTime  = nullptr;
+        std::atomic<float>* sync       = nullptr;
+        std::atomic<float>* feedback   = nullptr;
+        std::atomic<float>* mix        = nullptr;
+        std::atomic<float>* inputGain  = nullptr;
+        std::atomic<float>* outputGain = nullptr;
+        std::atomic<float>* hpfCutoff  = nullptr;
+        std::atomic<float>* lpfCutoff  = nullptr;
+        std::atomic<float>* drive      = nullptr;
+
+        std::atomic<float>* stepEnabled[echomatrix::Engine::kNumSteps] = {};
+        std::atomic<float>* stepLevel  [echomatrix::Engine::kNumSteps] = {};
+        std::atomic<float>* stepPan    [echomatrix::Engine::kNumSteps] = {};
+    };
+
+    void resolveValuePointers();
+
     echomatrix::Engine engine;
+    ValuePointers values;
     double hostSampleRate = 48000.0;
     double hostBpm = 0.0;
 

@@ -60,15 +60,18 @@ public:
         if (capacity <= 0 || channel < 0 || channel >= channels)
             return 0.0f;
 
+        // The read position is always inside one lap of the buffer, so the
+        // wrap is a single add or subtract: no modulo, no allocation.
         auto pos = (double) writePos[(std::size_t) channel] - delaySamples;
-        auto wrapped = std::fmod (pos, (double) capacity);
 
-        if (wrapped < 0.0)
-            wrapped += (double) capacity;
+        if (pos < 0.0)
+            pos += (double) capacity;
+        else if (pos >= (double) capacity)
+            pos -= (double) capacity;
 
-        const auto i0 = (int) std::floor (wrapped);
+        const auto i0 = (int) pos;                 // pos is never negative here
         const auto i1 = (i0 + 1) % capacity;
-        const auto frac = (float) (wrapped - (double) i0);
+        const auto frac = (float) (pos - (double) i0);
 
         const auto s0 = buffer[(std::size_t) channel * (std::size_t) capacity + (std::size_t) i0];
         const auto s1 = buffer[(std::size_t) channel * (std::size_t) capacity + (std::size_t) i1];

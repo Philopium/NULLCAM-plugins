@@ -85,7 +85,28 @@ EchoMatrixModeAudioProcessor::EchoMatrixModeAudioProcessor()
                           .withOutput ("Output", juce::AudioChannelSet::stereo(), true)),
       apvts (*this, nullptr, "PARAMS", createLayout())
 {
+    resolveValuePointers();
     applyPreset (Preset::dottedEighth);
+}
+
+void EchoMatrixModeAudioProcessor::resolveValuePointers()
+{
+    values.delayTime  = apvts.getRawParameterValue (ids::delayTime);
+    values.sync       = apvts.getRawParameterValue (ids::sync);
+    values.feedback   = apvts.getRawParameterValue (ids::feedback);
+    values.mix        = apvts.getRawParameterValue (ids::mix);
+    values.inputGain  = apvts.getRawParameterValue (ids::inputGain);
+    values.outputGain = apvts.getRawParameterValue (ids::outputGain);
+    values.hpfCutoff  = apvts.getRawParameterValue (ids::hpfCutoff);
+    values.lpfCutoff  = apvts.getRawParameterValue (ids::lpfCutoff);
+    values.drive      = apvts.getRawParameterValue (ids::drive);
+
+    for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
+    {
+        values.stepEnabled[i] = apvts.getRawParameterValue (stepParamId (ids::stepEnabled, i));
+        values.stepLevel  [i] = apvts.getRawParameterValue (stepParamId (ids::stepLevel, i));
+        values.stepPan    [i] = apvts.getRawParameterValue (stepParamId (ids::stepPan, i));
+    }
 }
 
 juce::AudioProcessorValueTreeState::ParameterLayout EchoMatrixModeAudioProcessor::createLayout()
@@ -375,21 +396,21 @@ void EchoMatrixModeAudioProcessor::processBlock (juce::AudioBuffer<float>& buffe
         return;
 
     echomatrix::Settings s;
-    s.delayTime = apvts.getRawParameterValue (ids::delayTime)->load();
-    s.syncEnabled = apvts.getRawParameterValue (ids::sync)->load() > 0.5f;
-    s.feedback = apvts.getRawParameterValue (ids::feedback)->load();
-    s.mix = apvts.getRawParameterValue (ids::mix)->load();
-    s.inputGain = apvts.getRawParameterValue (ids::inputGain)->load();
-    s.outputGain = apvts.getRawParameterValue (ids::outputGain)->load();
-    s.hpfCutoff = apvts.getRawParameterValue (ids::hpfCutoff)->load();
-    s.lpfCutoff = apvts.getRawParameterValue (ids::lpfCutoff)->load();
-    s.drive = apvts.getRawParameterValue (ids::drive)->load();
+    s.delayTime = values.delayTime->load();
+    s.syncEnabled = values.sync->load() > 0.5f;
+    s.feedback = values.feedback->load();
+    s.mix = values.mix->load();
+    s.inputGain = values.inputGain->load();
+    s.outputGain = values.outputGain->load();
+    s.hpfCutoff = values.hpfCutoff->load();
+    s.lpfCutoff = values.lpfCutoff->load();
+    s.drive = values.drive->load();
 
     for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
     {
-        s.steps[i].enabled = apvts.getRawParameterValue (stepParamId (ids::stepEnabled, i))->load() > 0.5f;
-        s.steps[i].level = apvts.getRawParameterValue (stepParamId (ids::stepLevel, i))->load();
-        s.steps[i].pan = apvts.getRawParameterValue (stepParamId (ids::stepPan, i))->load();
+        s.steps[i].enabled = values.stepEnabled[i]->load() > 0.5f;
+        s.steps[i].level = values.stepLevel[i]->load();
+        s.steps[i].pan = values.stepPan[i]->load();
     }
 
     engine.setSettings (s);
