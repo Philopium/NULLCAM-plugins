@@ -141,6 +141,12 @@ Serve Visual Studio 2022 (carico "Sviluppo di applicazioni desktop con C++"), CM
 un checkout di JUCE (scaricato al primo configure).
 
 ```bat
+build-windows.bat
+```
+
+oppure a mano:
+
+```bat
 cmake -B build -G "Visual Studio 17 2022" -A x64
 cmake --build build --config Release --target HarmonicResonatorMode_VST3
 ```
@@ -205,6 +211,7 @@ Source/PluginEditor.*              il pannello (Look and Feel, manopole, display
 tests/dsp_test.cpp                  test del motore
 tests/ui_check.cpp                  render del pannello + round trip preset/stato + read-out
 tests/vst3_check.cpp                il VST3 costruito, caricato e fatto suonare
+build-windows.bat                   build su Windows: compila, gira i test e prepara lo zip
 ```
 
 ## Note
