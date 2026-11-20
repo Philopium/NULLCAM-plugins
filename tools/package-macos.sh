@@ -77,8 +77,18 @@ lipo -info "$STAGE_BIN"
 rm -rf "$STAGE/$PROJECT.vst3/Contents/_CodeSignature"
 codesign --force --deep --sign - "$STAGE/$PROJECT.vst3"
 
+# The folder where the user presets live. It is not always the plugin name:
+# the two plugins with a longer name use a shorter folder, so that the path
+# stays readable.
+case "$PROJECT" in
+    EchoMatrixMode)        PRESET_FOLDER="ECHOMATRIX-MODE" ;;
+    HarmonicResonatorMode) PRESET_FOLDER="HARMONIC-RESONATOR-MODE" ;;
+    *)                     PRESET_FOLDER="$PROJECT" ;;
+esac
+
 # The friend facing instructions, with the plugin name filled in.
-sed "s/PLUGIN_NAME/$PROJECT/g" "$ROOT/tools/MAC-INSTALL.md" \
+sed -e "s/PLUGIN_NAME/$PROJECT/g" -e "s/PRESET_FOLDER/$PRESET_FOLDER/g" \
+    "$ROOT/tools/MAC-INSTALL.md" \
     > "$STAGE/LEGGIMI - installazione macOS.md"
 
 # The licence text travels with the binary, as the AGPLv3 asks for.

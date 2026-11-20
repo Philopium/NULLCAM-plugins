@@ -57,7 +57,7 @@ in fondo e premi **Apri comunque** sul messaggio che parla di NULLCAM.
 I tuoi preset sono file XML in questa cartella:
 
 ```
-~/Library/Application Support/NULLCAM/PLUGIN_NAME/presets
+~/Library/Application Support/NULLCAM/PRESET_FOLDER/presets
 ```
 
 Sono file di testo: puoi copiarli, fare un backup o mandarli a un amico.
