@@ -770,8 +770,8 @@ void EchoMatrixModeAudioProcessorEditor::paintStepEditor (juce::Graphics& g)
     g.setColour (EchoMatrixLookAndFeel::dim().withAlpha (0.75f));
 
     drawTracked (g, "TAP " + juce::String (selectedStep + 1) + " OF 16"
-                 + " - " + juce::String ((int) (delay * windowFraction * 1000.0f + 0.5f))
-                 + " MS INSIDE THE WINDOW",
+                 + " - " + juce::String ((int) (delay / (float) echomatrix::Engine::kNumSteps * 1000.0f + 0.5f))
+                 + " MS FROM THE PREVIOUS TAP",
                  juce::Rectangle<int> (left, stepArea.getY() + 202, width, 14),
                  0.10f, juce::Justification::centredLeft);
 

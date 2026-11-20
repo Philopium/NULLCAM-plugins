@@ -90,6 +90,16 @@ juce::Slider* nthHorizontalSlider (juce::Component& parent, int index)
     return nullptr;
 }
 
+// The box that holds the preset names.
+juce::ComboBox* findPresetBox (juce::Component& parent)
+{
+    for (int i = 0; i < parent.getNumChildComponents(); ++i)
+        if (auto* box = dynamic_cast<juce::ComboBox*> (parent.getChildComponent (i)))
+            return box;
+
+    return nullptr;
+}
+
 // The text box of a slider is a Label living inside it.
 juce::String sliderText (juce::Slider& slider)
 {
@@ -266,7 +276,16 @@ int main (int argc, char* argv[])
     dumpChildren (*editor);
 
     if (auto* panel = dynamic_cast<EchoMatrixModeAudioProcessorEditor*> (editor.get()))
-        panel->pullLiveData();
+    {
+        // The panel reads the live data with a little smoothing, so let it
+        // settle before the picture is taken.
+        for (int i = 0; i < 40; ++i)
+            panel->pullLiveData();
+    }
+
+    // The picture shows the factory preset the plugin ships with.
+    if (auto* box = findPresetBox (*editor))
+        box->setSelectedId (1, juce::dontSendNotification);
 
     //--------------------------------------------------------------------------
     // The step editor sliders show the step they are editing, and they say it
