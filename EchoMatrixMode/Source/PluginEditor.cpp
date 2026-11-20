@@ -746,6 +746,12 @@ void EchoMatrixModeAudioProcessorEditor::paintStepEditor (juce::Graphics& g)
     const auto synced = paramValue (ids::sync) > 0.5f;
     const auto bpm = processor.getSnapshot().bpm.load();
 
+    // Every step is a tap of the delay window: the first one repeats one
+    // delay time after the input, the last one almost two delay times.
+    const auto windowFraction = (float) selectedStep
+                                / (float) echomatrix::Engine::kNumSteps;
+    const auto repeatTime = delay * (1.0f + windowFraction);
+
     g.setFont (lookAndFeel.valueFont (10.0f));
     g.setColour (EchoMatrixLookAndFeel::ink().withAlpha (0.75f));
 
@@ -754,7 +760,7 @@ void EchoMatrixModeAudioProcessorEditor::paintStepEditor (juce::Graphics& g)
     if (synced && bpm > 0.0f)
         info = "TEMPO LOCKED AT " + juce::String ((int) (bpm + 0.5f)) + " BPM";
     else
-        info = "REPEATS " + juce::String ((int) (delay * 1000.0f + 0.5f)) + " MS AFTER THE INPUT";
+        info = "REPEATS " + juce::String ((int) (repeatTime * 1000.0f + 0.5f)) + " MS AFTER THE INPUT";
 
     g.drawText (info,
                 juce::Rectangle<int> (left, stepArea.getY() + 180, width, 16),
@@ -762,7 +768,10 @@ void EchoMatrixModeAudioProcessorEditor::paintStepEditor (juce::Graphics& g)
 
     g.setFont (lookAndFeel.labelFont (8.5f));
     g.setColour (EchoMatrixLookAndFeel::dim().withAlpha (0.75f));
-    drawTracked (g, "THE NEW REPEAT NEVER TOUCHES THE ONES ALREADY RINGING",
+
+    drawTracked (g, "TAP " + juce::String (selectedStep + 1) + " OF 16"
+                 + " - " + juce::String ((int) (delay * windowFraction * 1000.0f + 0.5f))
+                 + " MS INSIDE THE WINDOW",
                  juce::Rectangle<int> (left, stepArea.getY() + 202, width, 14),
                  0.10f, juce::Justification::centredLeft);
 

@@ -88,7 +88,7 @@ echomatrix::Settings baseSettings()
     s.lpfCutoff = 20000.0f;
     s.drive = 0.0f;
 
-    // Only the first step is on: one repeat every four beats.
+    // Only the first step is on: one repeat every delay time.
     s.steps[0].enabled = true;
     s.steps[0].level = 1.0f;
     s.steps[0].pan = 0.0f;
@@ -222,9 +222,10 @@ int main()
 
         const auto together = run (engine, input);
 
-        // The second step fires at 8 sixteenths, that is one full delay period
-        // later, so everything before that must be untouched.
-        const auto boundary = (int) (0.25 * kSampleRate) - 32;
+        // The second step fires at 8 sixteenths, that is half a delay period
+        // later, and its repeat opens one whole delay period after that: so
+        // everything before 1.5 delay periods must be untouched.
+        const auto boundary = (int) (1.4 * 0.25 * kSampleRate);
         double difference = 0.0;
 
         for (int i = 0; i < boundary; ++i)
@@ -378,6 +379,211 @@ int main()
     }
 
     //--------------------------------------------------------------------------
+    // Every step taps a different moment of the delay window: the pattern is
+    // a matrix of taps, not one delay line with a gate on it.
+    {
+        echomatrix::Engine engine;
+        engine.prepare (kSampleRate);
+
+        auto settings = baseSettings();
+        settings.steps[0].enabled = false;
+        settings.steps[8].enabled = true;
+        settings.steps[8].level = 1.0f;
+        engine.setSettings (settings);
+
+        const auto input = click ((int) (kSampleRate * 2.0));
+        const auto output = run (engine, input);
+
+        // Step 9 is the middle of the window: it repeats 1.5 delay times later.
+        const auto expected = (int) (1.5 * 0.25 * kSampleRate);
+        const auto found = firstAudibleSample (output.left);
+
+        std::printf ("the eighth step repeats at sample %d, expected around %d\n",
+                     found, expected);
+        check (found >= expected - 64 && found <= expected + 64,
+               "every step touches its own moment of the delay window");
+
+        // And the first step, one delay time later, is still untouched.
+        const auto firstExpected = (int) (0.25 * kSampleRate);
+        const auto firstFound = firstAudibleSample (output.left, 1.0e-5f);
+
+        check (firstFound == found,
+               "a step on its own repeats only at its own moment");
+        check (firstExpected > 0, "the delay window starts at one delay time");
+    }
+
+    //--------------------------------------------------------------------------
+    // Two steps in the pattern make two different repeats.
+    {
+        echomatrix::Engine engine;
+        engine.prepare (kSampleRate);
+
+        auto settings = baseSettings();
+        settings.steps[0].enabled = true;
+        settings.steps[4].enabled = true;
+        settings.steps[4].level = 1.0f;
+        engine.setSettings (settings);
+
+        const auto input = click ((int) (kSampleRate * 2.0));
+        const auto output = run (engine, input);
+
+        const auto firstTap = (int) (1.0 * 0.25 * kSampleRate);
+        const auto secondTap = (int) (1.25 * 0.25 * kSampleRate);
+
+        const auto firstEnergy = energy (output.left, firstTap, firstTap + 200);
+        const auto secondEnergy = energy (output.left, secondTap, secondTap + 200);
+
+        std::printf ("the two taps carry %.4f and %.4f of energy\n",
+                     firstEnergy, secondEnergy);
+
+        check (firstEnergy > 0.0, "the first step makes its own repeat");
+        check (secondEnergy > 0.0, "the fifth step makes another repeat");
+    }
+
+    //--------------------------------------------------------------------------
+    // The whole grid makes sixteen different repeats, one per step.
+    {
+        echomatrix::Engine engine;
+        engine.prepare (kSampleRate);
+
+        auto settings = baseSettings();
+
+        for (int i = 0; i < 16; ++i)
+        {
+            settings.steps[i].enabled = true;
+            settings.steps[i].level = 1.0f;
+        }
+
+        engine.setSettings (settings);
+
+        const auto input = click ((int) (kSampleRate * 2.0));
+        const auto output = run (engine, input);
+
+        const auto window = (int) (0.25 * kSampleRate / 16);
+        int tapsFound = 0;
+
+        for (int step = 0; step < 16; ++step)
+        {
+            const auto at = (int) (0.25 * kSampleRate) + step * window;
+
+            if (energy (output.left, at - 4, at + 4) > 0.0)
+                ++tapsFound;
+        }
+
+        std::printf ("the grid makes %d different repeats\n", tapsFound);
+        check (tapsFound == 16, "the sixteen steps make sixteen different repeats");
+    }
+
+    //--------------------------------------------------------------------------
+    // The hand over from one repeat to the next is seamless: no click.
+    {
+        echomatrix::Engine engine;
+        engine.prepare (kSampleRate);
+        engine.setSettings (baseSettings());
+
+        std::vector<float> input ((int) (kSampleRate * 1.0), 0.0f);
+
+        for (std::size_t i = 0; i < input.size(); ++i)
+            input[i] = 0.5f * (float) std::sin ((double) i * 0.03);
+
+        const auto output = run (engine, input);
+
+        // The first repeat of the pattern takes over at one delay time.
+        const auto boundary = (int) (0.25 * kSampleRate);
+        double biggestJump = 0.0;
+
+        for (int i = boundary - 32; i < boundary + 32; ++i)
+            biggestJump = std::max (biggestJump,
+                                    std::abs ((double) output.left[(std::size_t) i]
+                                              - (double) output.left[(std::size_t) (i - 1)]));
+
+        std::printf ("the biggest jump at the hand over is %.5f\n", biggestJump);
+        check (biggestJump < 0.05, "the hand over from one repeat to the next is seamless");
+    }
+
+    //--------------------------------------------------------------------------
+    // A step that is switched off fades away instead of stopping dead.
+    {
+        echomatrix::Engine engine;
+        engine.prepare (kSampleRate);
+        engine.setSettings (baseSettings());
+
+        std::vector<float> input ((int) (kSampleRate * 2.0), 0.0f);
+
+        for (std::size_t i = 0; i < input.size(); ++i)
+            input[i] = 0.5f * (float) std::sin ((double) i * 0.03);
+
+        // The first part plays with the step on.
+        const auto split = (int) (0.8 * kSampleRate);
+        run (engine, std::vector<float> (input.begin(), input.begin() + split));
+
+        // Then the step is switched off while the repeat is still ringing.
+        auto settings = baseSettings();
+        settings.steps[0].enabled = false;
+        engine.setSettings (settings);
+
+        const auto second = run (engine,
+                                 std::vector<float> (input.begin() + split,
+                                                     input.end()));
+
+        double biggestJump = 0.0;
+
+        for (std::size_t i = 1; i < second.left.size(); ++i)
+            biggestJump = std::max (biggestJump,
+                                    std::abs ((double) second.left[i] - (double) second.left[i - 1]));
+
+        // The repeat that was already ringing keeps going, and then fades.
+        const auto stillRinging = energy (second.left, 0, (int) (0.05 * kSampleRate));
+
+        // After the life of that repeat is over, nothing is left.
+        const auto tail = energy (second.left,
+                                  (int) (second.left.size() - 0.05 * kSampleRate),
+                                  (int) second.left.size());
+
+        std::printf ("the biggest jump after the switch off is %.5f, the tail carries %.6f\n",
+                     biggestJump, tail);
+
+        check (biggestJump < 0.1, "a step that is switched off does not click");
+        check (stillRinging > 0.0, "the repeat that was ringing keeps going for a while");
+        check (tail < 1.0e-6, "a step that is switched off fades away completely");
+    }
+
+    //--------------------------------------------------------------------------
+    // The result does not depend on the size of the audio block: the host
+    // can call the plugin with 1 sample or with 512 and hear the same thing.
+    {
+        echomatrix::Engine engine;
+        engine.prepare (kSampleRate);
+
+        auto settings = baseSettings();
+        settings.steps[4].enabled = true;
+        settings.steps[8].enabled = true;
+        engine.setSettings (settings);
+
+        const auto input = click ((int) (kSampleRate * 1.0));
+
+        const auto reference = run (engine, input, kSampleRate, 512);
+        double worst = 0.0;
+
+        for (const auto blockSize : { 1, 7, 16, 32, 64, 128, 333 })
+        {
+            echomatrix::Engine other;
+            other.prepare (kSampleRate);
+            other.setSettings (settings);
+
+            const auto output = run (other, input, kSampleRate, blockSize);
+
+            for (std::size_t i = 0; i < reference.left.size(); ++i)
+                worst = std::max (worst,
+                                  std::abs ((double) reference.left[i]
+                                            - (double) output.left[i]));
+        }
+
+        std::printf ("the biggest difference between the block sizes is %.9f\n", worst);
+        check (worst < 1.0e-6, "the sound does not depend on the size of the audio block");
+    }
+
+    //--------------------------------------------------------------------------
     // The pool is bounded and the audio never explodes.
     {
         echomatrix::Engine engine;
@@ -415,6 +621,39 @@ int main()
         check (peak < 8.0, "a crazy pattern stays inside a sane range");
         check (engine.getActiveVoiceCount() <= echomatrix::Engine::kMaxEvents,
                "the voice pool never grows past its limit");
+    }
+
+    //--------------------------------------------------------------------------
+    // The wet meter on the panel falls back down instead of sticking on the
+    // loudest moment ever heard.
+    {
+        echomatrix::Engine engine;
+        engine.prepare (kSampleRate);
+
+        auto settings = baseSettings();
+        settings.feedback = 0.8f;
+        engine.setSettings (settings);
+
+        // A second of loud noise, then two seconds of silence.
+        std::vector<float> noise ((int) (kSampleRate * 1.0), 0.0f);
+
+        for (int i = 0; i < (int) (kSampleRate * 1.0); ++i)
+            noise[(std::size_t) i] = 0.8f * (float) std::sin ((double) i * 0.2);
+
+        run (engine, noise);
+
+        const auto loud = engine.getSnapshot().wetLevel.load();
+
+        const std::vector<float> silence ((int) (kSampleRate * 2.0), 0.0f);
+        run (engine, silence);
+
+        const auto quiet = engine.getSnapshot().wetLevel.load();
+
+        std::printf ("the wet meter reads %.3f during the noise, %.3f after it stops\n",
+                     loud, quiet);
+
+        check (loud > 0.0f, "the wet meter sees the repeats");
+        check (quiet < loud, "the wet meter comes back down when the input stops");
     }
 
     std::printf ("\n%s\n", failures == 0 ? "all checks passed"

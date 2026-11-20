@@ -263,7 +263,11 @@ int main (int argc, char* argv[])
             check (std::abs (panSlider->getValue() - paramValue (processor, panId)) < 1.0e-4f,
                    "the PAN slider follows the parameter");
 
-            check (sliderText (*levelSlider) == "70 %",
+            // The read-out follows the factory value of the step.
+            const auto expectedLevel = juce::String ((int) (paramValue (processor, levelId) * 100.0f + 0.5f))
+                                       + " %";
+
+            check (sliderText (*levelSlider) == expectedLevel,
                    "the LEVEL read-out is written as a percentage");
             check (sliderText (*panSlider) == "C",
                    "a centred step reads C on the PAN read-out");

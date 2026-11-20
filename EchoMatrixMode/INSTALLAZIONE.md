@@ -49,10 +49,13 @@ LEGGIMI - installazione.md       questo file
 
 1. Metti il plugin su una traccia: con `DOTTED EIGHTH` senti subito un ritorno
    ritardato di 375 ms.
-2. Il pattern è di 16 passi e un passo corrisponde a una sedicesima del tempo di
-   delay. I pad accesi sono quelli che generano ripetizioni: accendine qualcuno e
-   ascolta come la grana si moltiplica.
-3. Clicca un pad per selezionarlo: a destra trovi `LEVEL` e `PAN` di quel passo.
+2. Il pattern è di 16 passi e i 16 passi dividono **un periodo di delay**: il
+   passo 1 ripete esattamente un tempo di delay dopo l'ingresso, il passo 16
+   quasi due, e fra due passi ci sono `DELAY / 16`. I pad accesi sono i tap che
+   generano ripetizioni: accendine qualcuno e ascolta come la grana si apre.
+3. Clicca un pad per selezionarlo: a destra trovi `LEVEL` e `PAN` di quel passo,
+   e le due righe sotto ti dicono **quando** suona quel passo (`REPEATS ... MS
+   AFTER THE INPUT` e `TAP ... OF 16` dentro la finestra di delay).
    Ogni passo è una voce a sé, quindi un passo a sinistra e uno a destra si
    sentono davvero separati.
 4. `FEEDBK` tiene vivo il riverbero, `MIX` decide quanto entra nel mix finale.

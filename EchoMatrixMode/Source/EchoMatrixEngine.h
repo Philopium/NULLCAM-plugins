@@ -2,17 +2,24 @@
 
 // EchoMatrixMode engine - Phase 1 usable core.
 //
-//   input ---> [ memory delay line ] ---> 16 step sequencer (one step per 16th)
+//   input ---> [ memory delay line ] ---> 16 step sequencer (one matrix tap)
 //                      |                         |
 //                      |                         +--> spawn an independent
-//                      |                              EventVoice (own level,
-//                      |                              own pan, own envelope,
+//                      |                              EventVoice (own tap,
+//                      |                              own level, own pan,
+//                      |                              own envelope,
 //                      |                              own lifetime)
 //                      |
 //                      +--> feedback loop (HP -> LP -> drive -> feedback)
 //                              |
 //                              v
 //   output = dry * (1 - mix) + wet * mix
+//
+// The pattern is a matrix of taps. The 16 steps divide one delay period, and
+// every step touches a different moment of that window: step 1 repeats exactly
+// one delay time later, step 16 almost two delay times later. Two steps never
+// play the same material, so the pattern really decides which repeats happen
+// instead of gating one delay line.
 //
 // Every repeat is an independent voice: spawning a new repeat never touches the
 // state of the repeats that are already ringing. The pool is bounded (64
@@ -24,6 +31,7 @@
 #include <algorithm>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <vector>
 
 namespace echomatrix
@@ -102,10 +110,14 @@ struct EventVoice
 {
     bool active = false;
 
-    double pending = 0.0;         // samples to wait before the grain opens
+    int step = 0;                  // the step that fired this voice
+
     double remainingSamples = 0.0;  // life left, in samples
     double lifetimeSamples = 1.0;   // total life of the grain, in samples
     double elapsed = 0.0;           // samples since the grain opened
+    double fadeSamples = 1.0;       // length of the fade out
+    double fadeInSamples = 0.0;     // length of the fade in (0 = no fade)
+    bool fadingOut = false;         // the step was switched off while ringing
 
     double tapOffset = 0.0;         // how far in the past this voice reads
     double readRate = 1.0;          // 1.0 = original pitch (Phase 2 uses this)
@@ -114,6 +126,8 @@ struct EventVoice
     float pan = 0.0f;               // -1 = left, 0 = centre, 1 = right
 
     float feedbackSend = 0.0f;      // this voice's own share of the loop
+
+    std::uint64_t birth = 0;        // when this voice was born, for stealing
 };
 
 //==============================================================================
@@ -190,20 +204,24 @@ public:
     static constexpr int kMaxEvents = 64;
     static constexpr int kNumSteps = 16;
 
-    // The pattern runs in sixteenths: four steps make one delay period.
-    static constexpr int kStepsPerPeriod = 4;
+    // The pattern runs in sixteenths of the delay period: the 16 steps make
+    // one full delay period, so a single step repeats once per delay time.
+    static constexpr int kStepsPerPeriod = kNumSteps;
 
     void prepare (double sampleRate)
     {
         sr = sampleRate;
-        const auto maxDelaySamples = (int) (2.2 * sampleRate); // 2 s max + headroom
+
+        // The taps spread over one delay window on top of the delay itself,
+        // so the memory has to hold almost twice the longest delay.
+        const auto maxDelaySamples = (int) (4.5 * sampleRate); // 2 x 2 s + headroom
         lines[0].setCapacity (maxDelaySamples, 2);
         lines[1].setCapacity (maxDelaySamples, 2);
         lines[0].clear();
         lines[1].clear();
 
         events.assign ((std::size_t) kMaxEvents, EventVoice{});
-        nextEventIndex = 0;
+        voiceCounter = 0;
 
         hpfL.reset(); hpfR.reset();
         lpfL.reset(); lpfR.reset();
@@ -215,6 +233,8 @@ public:
         samplesSinceTick = 0.0;
         stepIndex = 0;
         started = false;
+        for (auto& wasOn : stepWasOn)
+            wasOn = false;
         activeCountSmoothed = 1.0;
         wetPeak = 0.0f;
 
@@ -232,12 +252,14 @@ public:
         for (auto& e : events)
             e = EventVoice{};
 
-        nextEventIndex = 0;
+        voiceCounter = 0;
         hpfL.reset(); hpfR.reset();
         lpfL.reset(); lpfR.reset();
         samplesSinceTick = 0.0;
         stepIndex = 0;
         started = false;
+        for (auto& wasOn : stepWasOn)
+            wasOn = false;
         activeCountSmoothed = 1.0;
         wetPeak = 0.0f;
 
@@ -310,19 +332,22 @@ public:
             if (! started)
             {
                 started = true;
-                spawnEventFromCurrentStep (delaySamples, tickSamples);
+                spawnEventFromCurrentStep (delaySamples);
                 stepIndex = 1 % kNumSteps;
+                samplesSinceTick = 0.0;
             }
 
             // ---- sequencer: one step every sixteenth of the delay period ----
-            samplesSinceTick += 1.0;
-
+            // The counter is checked before it grows, so the steps land on
+            // the exact sample: step 1 at 0, step 2 at D/16, and so on.
             if (samplesSinceTick >= tickSamples)
             {
                 samplesSinceTick -= tickSamples;
-                spawnEventFromCurrentStep (delaySamples, tickSamples);
+                spawnEventFromCurrentStep (delaySamples);
                 stepIndex = (stepIndex + 1) % kNumSteps;
             }
+
+            samplesSinceTick += 1.0;
 
             snapshot.currentStep.store (stepIndex, std::memory_order_relaxed);
             snapshot.stepPhase.store ((float) std::clamp (samplesSinceTick / tickSamples, 0.0, 1.0),
@@ -340,16 +365,23 @@ public:
 
                 ++alive;
 
-                // The grain is still travelling: it opens once the delay time
-                // has passed, and only then does it become audible.
-                if (ev.pending > 0.0)
-                {
-                    ev.pending -= 1.0;
-                    continue;
-                }
+                // The repeat holds its level: the next repeat of the same step
+                // takes over on the very same sample, with the same material,
+                // so the hand over is seamless. The fades only appear when the
+                // step has been switched on or off while the repeat was
+                // already ringing.
+                if (! settings.steps[ev.step].enabled)
+                    ev.fadingOut = true;
 
-                const auto life = std::clamp (ev.remainingSamples / ev.lifetimeSamples, 0.0, 1.0);
-                const auto env = (float) life * (0.55f + 0.45f * (float) life);
+                const auto inFade = ev.fadeInSamples > 0.0
+                    ? smoothFade (ev.elapsed / ev.fadeInSamples)
+                    : 1.0f;
+
+                const auto outFade = ev.fadingOut
+                    ? smoothFade (ev.remainingSamples / ev.fadeSamples)
+                    : 1.0f;
+
+                const auto env = std::min (inFade, outFade);
                 const auto gain = ev.level * env;
 
                 const auto panRad = ((double) ev.pan + 1.0) * 3.14159265358979 / 4.0;
@@ -375,6 +407,11 @@ public:
             // A smooth count of the sounding voices, for the panel.
             activeCountSmoothed += ((double) alive - activeCountSmoothed) * 0.002;
 
+            // ---- the taps can add up: a gentle safety limiter keeps the
+            // output inside the rails and leaves the quiet part alone ----
+            wetL = softClip (wetL);
+            wetR = softClip (wetR);
+
             // ---- feedback loop: one global ring that keeps the memory alive ----
             const auto srcL = lines[0].read (0, delaySamples);
             const auto srcR = lines[1].read (1, delaySamples);
@@ -399,8 +436,10 @@ public:
             output[0][i] = (inL * (1.0f - wetMix) + wetL * wetMix) * outGain;
             output[1][i] = (inR * (1.0f - wetMix) + wetR * wetMix) * outGain;
 
-            wetPeak = std::max (wetPeak, std::abs (wetL));
-            wetPeak = std::max (wetPeak, std::abs (wetR));
+            // The wet peak decays slowly, so the meter falls back down instead
+            // of staying stuck on the loudest moment ever heard.
+            wetPeak = std::max (std::abs (wetL), wetPeak * 0.99995f);
+            wetPeak = std::max (std::abs (wetR), wetPeak * 0.99995f);
         }
 
         snapshot.activeEvents.store (activeCountSmoothed >= 0.5
@@ -410,9 +449,39 @@ public:
     }
 
 private:
-    void spawnEventFromCurrentStep (double delaySamples, double tickSamples)
+    // A smooth 0..1 curve, used for the fades at the ends of a repeat.
+    static float smoothFade (double x) noexcept
+    {
+        x = std::clamp (x, 0.0, 1.0);
+        return (float) (x * x * (3.0 - 2.0 * x));
+    }
+
+    // The safety limiter: below the threshold nothing changes, above it the
+    // signal is squeezed towards the rails instead of being cut off.
+    static float softClip (float x) noexcept
+    {
+        constexpr float threshold = 0.75f;
+        constexpr float headroom = 1.0f - threshold;
+
+        const auto a = std::abs (x);
+
+        if (a <= threshold)
+            return x;
+
+        const auto over = (a - threshold) / headroom;
+        return std::copysign (threshold + headroom * (float) std::tanh (over), x);
+    }
+
+    void spawnEventFromCurrentStep (double delaySamples)
     {
         const auto& step = settings.steps[stepIndex];
+
+        // The engine remembers if the step was already on at the previous
+        // tick: a step that has just been switched on fades in, a step that
+        // has been running for a while hands over to the next repeat of
+        // itself without any gap.
+        const auto wasOn = stepWasOn[stepIndex];
+        stepWasOn[stepIndex] = step.enabled;
 
         if (! step.enabled)
             return;
@@ -425,21 +494,36 @@ private:
         if (slot == nullptr)
             return;
 
-        const auto tap = std::clamp (delaySamples * (double) step.timing, 1.0,
+        // Every step taps a different moment of the delay window, so two
+        // steps never play the same material: the pattern really decides
+        // which repeats happen, instead of gating one delay line.
+        // Step 1 taps exactly one delay time later, step 16 almost two.
+        const auto window = delaySamples / (double) kNumSteps;
+
+        const auto tap = std::clamp (delaySamples * (double) step.timing
+                                     + window * (double) stepIndex,
+                                     1.0,
                                      (double) (lines[0].getCapacity() - 2));
 
         slot->active = true;
-        slot->lifetimeSamples = std::max (1.0, tickSamples * 2.0);
+        slot->step = stepIndex;
+
+        // The repeat lives for one whole delay period, so it hands over to
+        // the next repeat of the same step without a gap.
+        slot->lifetimeSamples = std::max (1.0, delaySamples);
         slot->remainingSamples = slot->lifetimeSamples;
         slot->elapsed = 0.0;
+        slot->fadeSamples = std::max (1.0, slot->lifetimeSamples * 0.01);
+        slot->fadeInSamples = wasOn ? 0.0 : std::max (1.0, slot->fadeSamples);
+        slot->fadingOut = false;
+
         slot->readRate = 1.0;
         slot->tapOffset = tap;
-        // The grain waits for the delay time, then opens on the material that
-        // was captured when the step fired.
-        slot->pending = tap;
+
         slot->level = std::clamp (step.level, 0.0f, 2.0f);
         slot->pan = std::clamp (step.pan, -1.0f, 1.0f);
         slot->feedbackSend = 0.0f;
+        slot->birth = ++voiceCounter;
     }
 
     EventVoice* findFreeEvent() noexcept
@@ -453,11 +537,20 @@ private:
 
     EventVoice* findOldestEvent() noexcept
     {
-        // Round-robin stealing: the pool never grows, so the CPU is bounded.
-        auto* ev = &events[(std::size_t) nextEventIndex];
-        nextEventIndex = (nextEventIndex + 1) % kMaxEvents;
-        ev->active = false;
-        return ev;
+        // The pool never grows, so the CPU is bounded. When it is full the
+        // voice that has been ringing the longest is the one that goes: the
+        // others keep their state untouched.
+        EventVoice* oldest = nullptr;
+
+        for (auto& ev : events)
+            if (ev.active && (oldest == nullptr || ev.birth < oldest->birth))
+                oldest = &ev;
+
+        if (oldest == nullptr)
+            oldest = &events[0];
+
+        oldest->active = false;
+        return oldest;
     }
 
     double sr = 48000.0;
@@ -465,11 +558,12 @@ private:
 
     DelayLine lines[2];
     std::vector<EventVoice> events;
-    int nextEventIndex = 0;
+    std::uint64_t voiceCounter = 0;
 
     int stepIndex = 0;
     double samplesSinceTick = 0.0;
     bool started = false;
+    bool stepWasOn[kNumSteps] = {};
 
     Settings settings;
     Snapshot snapshot;

@@ -32,44 +32,94 @@ const PresetValues& presetValues (EchoMatrixModeAudioProcessor::Preset preset)
 
     auto& v = table[juce::jlimit (0, (int) std::size (table) - 1, (int) preset)];
 
-    // Phase 1: fixed 16-step pattern, alternating on/off for variety.
+    // The matrix starts empty: every preset says which taps of the delay
+    // window it uses, how loud each one is and where it sits in the stereo
+    // field. Step 1 is the tap exactly one delay time after the input,
+    // step 16 is almost two delay times after it.
     for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
     {
-        v.stepEnabled[i] = (i % 2 == 0) ? 1.0f : 0.0f;
-        v.stepLevel[i]   = 0.7f + 0.3f * float (i % 3) / 2.0f;
-        v.stepPan[i]     = (i % 4 == 1) ? -0.6f : ((i % 4 == 3) ? 0.6f : 0.0f);
+        v.stepEnabled[i] = 0.0f;
+        v.stepLevel[i]   = 0.0f;
+        v.stepPan[i]     = 0.0f;
     }
 
-    // Preset-specific twists on top of the alternating pattern.
+    auto put = [&v] (int step, float level, float pan)
+    {
+        if (step < 0 || step >= echomatrix::Engine::kNumSteps)
+            return;
+
+        v.stepEnabled[step] = 1.0f;
+        v.stepLevel[step]   = level;
+        v.stepPan[step]     = pan;
+    };
+
     switch (preset)
     {
+        case EchoMatrixModeAudioProcessor::Preset::dottedEighth:
+            // Four taps across the window, each one quieter and wider.
+            put (0, 0.62f,  0.0f);
+            put (4, 0.52f, -0.30f);
+            put (8, 0.44f,  0.30f);
+            put (12, 0.36f, 0.0f);
+            break;
+
         case EchoMatrixModeAudioProcessor::Preset::pingPong:
-            for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
-                v.stepPan[i] = (i % 2 == 0) ? -0.8f : 0.8f;
+            // The taps walk from left to right and back.
+            put (0, 0.70f, -0.80f);
+            put (4, 0.60f,  0.80f);
+            put (8, 0.50f, -0.80f);
+            put (12, 0.42f, 0.80f);
             break;
+
         case EchoMatrixModeAudioProcessor::Preset::dub:
-            for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
-                v.stepEnabled[i] = 1.0f;
+            // Few taps, a lot of feedback, the tail does the work.
+            put (0, 0.75f,  0.0f);
+            put (7, 0.46f, -0.20f);
+            put (12, 0.32f, 0.20f);
             break;
+
+        case EchoMatrixModeAudioProcessor::Preset::reverseWash:
+            // Five taps, wide and soft, the tape echo flavour.
+            put (0, 0.55f,  0.00f);
+            put (2, 0.46f,  0.35f);
+            put (5, 0.40f, -0.35f);
+            put (9, 0.34f,  0.20f);
+            put (13, 0.28f, -0.20f);
+            break;
+
         case EchoMatrixModeAudioProcessor::Preset::glitchTap:
-            for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
-                v.stepEnabled[i] = (i % 3 == 0) ? 1.0f : 0.0f;
+            // Irregular taps, short window, it stutters.
+            put (0,  0.80f,  0.00f);
+            put (3,  0.50f,  0.50f);
+            put (6,  0.66f, -0.50f);
+            put (10, 0.40f,  0.25f);
+            put (14, 0.55f, -0.25f);
             break;
+
         case EchoMatrixModeAudioProcessor::Preset::ambientWash:
-            for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
-                v.stepEnabled[i] = 1.0f;
+            // Many soft taps: the input melts into a wide wash.
+            put (0,  0.30f,  0.00f);
+            put (2,  0.26f,  0.40f);
+            put (4,  0.24f, -0.40f);
+            put (6,  0.22f,  0.30f);
+            put (8,  0.20f, -0.30f);
+            put (10, 0.18f,  0.45f);
+            put (12, 0.16f, -0.45f);
+            put (14, 0.14f,  0.00f);
             break;
+
         case EchoMatrixModeAudioProcessor::Preset::slapback:
-            for (int i = 1; i < echomatrix::Engine::kNumSteps; ++i)
-                v.stepEnabled[i] = 0.0f;
+            // One single tap, right on the delay time.
+            put (0, 0.85f, 0.0f);
             break;
+
         case EchoMatrixModeAudioProcessor::Preset::chaotic:
+            // The whole window is alive and nobody stays in the middle.
             for (int i = 0; i < echomatrix::Engine::kNumSteps; ++i)
-            {
-                v.stepEnabled[i] = 1.0f;
-                v.stepPan[i]     = float (i % 5 - 2) * 0.4f;
-            }
+                put (i, 0.30f - 0.010f * (float) i,
+                         (float) ((i % 5) - 2) * 0.35f);
             break;
+
         default:
             break;
     }

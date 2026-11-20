@@ -11,22 +11,31 @@ stanno già suonando.
 
 ## Cosa fa
 
-L'input entra in una memoria circolare stereo. Il sequenziale gira a 16 passi e
-ogni passo attivo **tocca la memoria**: il campione catturato in quel momento
-diventa una voce autonoma, che aspetta il tempo di delay, si apre, suona per due
-sedicesimi di pattern e muore.
+L'input entra in una memoria circolare stereo. I 16 passi del sequenziale
+**dividono un periodo di delay**: ogni passo attivo è un **tap diverso** della
+finestra di delay.
 
-Ogni voce ha il suo `LEVEL`, il suo `PAN`, la sua posizione di lettura e il suo
-inviluppo. Nessuna ripetizione può alterare le altre: è il punto di tutto il
-plugin. Il pool è limitato a 64 voci e, quando è pieno, la voce più vecchia
-viene rubata a rotazione, così il costo CPU non cresce mai.
+- Il passo 1 ripete esattamente **un tempo di delay** dopo l'ingresso.
+- Il passo 16 ripete quasi **due tempi di delay** dopo l'ingresso.
+- Fra due passi ci sono `DELAY / 16`: ogni passo tocca un momento diverso della
+  finestra, quindi due passi non suonano mai lo stesso materiale.
+
+Il pattern decide davvero **quali ripetizioni esistono**: non è un delay line con
+un gate davanti, sono 16 tap indipendenti, ciascuno con la sua posizione nel
+tempo, il suo livello, il suo pan e la sua vita.
+
+Ogni ripetizione è una voce autonoma: quando il passo scatta, la voce nasce con
+il suo stato e non tocca mai le voci che stanno già suonando. Il pool è limitato
+a 64 voci e, quando è pieno, viene rubata la voce **più vecchia**, così il costo
+CPU non cresce mai.
 
 Il percorso globale è: `input → memoria → (filtri + drive nel loop di feedback)
 → mix dry/wet → uscita`.
 
 La memoria riceve `ingresso + feedback filtrato`, letto al tempo di delay. Il
 feedback viene applicato una volta sola, e passa attraverso un passa-alto, un
-passa-basso e una saturazione `tanh`.
+passa-basso e una saturazione `tanh`. Sul bus wet c'è un limiter morbido che
+impedisce al pattern di far esplodere il livello.
 
 ---
 
@@ -46,13 +55,16 @@ passa-basso e una saturazione `tanh`.
 
 ### Sequenziale
 
-I 16 pad sono i passi del pattern. Un passo acceso fa partire una ripetizione.
+I 16 pad sono i passi del pattern. Un passo acceso mette in gioco il suo tap.
 Clicca un pad per selezionarlo e modificarlo.
 
 | Comando | Cosa fa |
 |---|---|
 | `LEVEL` (per passo) | livello della ripetizione di quel passo, da 0% a 100% |
 | `PAN` (per passo) | posizione stereo della ripetizione: `L`, `C` o `R` |
+
+Lo step editor dice in chiaro **dove cade** il passo scelto: `REPEATS 562 MS AFTER
+THE INPUT` e `TAP 9 OF 16 - 187 MS INSIDE THE WINDOW`.
 
 Il pannello mostra in tempo reale quante ripetizioni stanno suonando
 (`ACTIVE REPEATS`), il livello del riverbero (`WET`) e la posizione nel pattern
@@ -115,11 +127,15 @@ cmake --build build --config Release --target echomatrix_dsp_test
 build\Release\echomatrix_dsp_test.exe
 ```
 
-Controlla: la ripetizione arriva esattamente un tempo di delay dopo l'ingresso, il
-sequenziale decide quali ripetizioni esistono, una ripetizione nuova non altera
-quelle già in corso, il pan resta stereo, il feedback continua a suonare, il mix a
-zero è un pass-through pulito, il sync segue il tempo del host, il silenzio resta
-silenzio, l'output non diventa mai NaN e il pool di voci non cresce oltre 64.
+Controlla: la ripetizione arriva esattamente un tempo di delay dopo l'ingresso,
+ogni passo tocca il suo momento della finestra di delay, i 16 passi fanno 16
+ripetizioni diverse, il sequenziale decide quali ripetizioni esistono, una
+ripetizione nuova non altera quelle già in corso, il passaggio da una
+ripetizione alla successiva è senza click, un passo spento sfuma senza click,
+il pan resta stereo, il feedback continua a suonare, il mix a zero è un
+pass-through pulito, il sync segue il tempo del host, il silenzio resta
+silenzio, il risultato non cambia con la dimensione del blocco audio, l'output
+non diventa mai NaN e il pool di voci non cresce oltre 64.
 
 Per vedere il pannello senza DAW (e verificare preset, stato e read-out):
 
@@ -143,10 +159,10 @@ e il delay ripete davvero.
 ## Struttura
 
 ```
-Source/EchoMatrixEngine.h  motore: memoria, sequenziale, voci indipendenti, feedback (nessuna dipendenza da JUCE)
+Source/EchoMatrixEngine.h  motore: memoria, matrice di tap, sequenziale, voci indipendenti, feedback (nessuna dipendenza da JUCE)
 Source/PluginProcessor.*   parametri, 8 preset factory, preset XML utente, stato, BPM del host
 Source/PluginEditor.*      il pannello (Look and Feel, manopole, 16 pad, step editor, meter)
-tests/dsp_test.cpp          test del motore (17 controlli)
+tests/dsp_test.cpp          test del motore (30 controlli)
 tests/ui_check.cpp          render del pannello + round trip preset/stato + read-out
 tests/vst3_check.cpp        il VST3 costruito, caricato e fatto suonare
 ```
@@ -155,8 +171,8 @@ tests/vst3_check.cpp        il VST3 costruito, caricato e fatto suonare
 
 - Il motore è senza allocazioni sul thread audio: memoria, voci e filtri sono
   preparati in `prepare()` e non crescono mai durante il playback.
-- La voce rubata è sempre la più vecchia del pool, con rubatura a rotazione: il
-  costo resta costante anche con tutti i 16 passi attivi.
+- La voce rubata è sempre la più vecchia del pool: il costo resta costante
+  anche con tutti i 16 passi attivi.
 - Il sync segue il BPM che il host comunica; senza host (o senza trasporto) resta
   il tempo manuale.
 - Fase 1: il pannello annuncia già `PHASE 2` per pitch, reverse, filtri e FX per
