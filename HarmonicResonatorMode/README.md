@@ -117,9 +117,9 @@ La card `PARTIALS` **non è un disegno**: le barre vengono dal motore.
 - **altezza** = il livello di quel partial, in dB
 - `1 OF 8 PARTIALS RINGING` = quanti partiali stanno suonando in questo momento
 
-La card `INTERACTION` disegna il loop: le due frecce (avanti e ritorno) si
-allargano e si illuminano con `INTERACT` e `FEEDBACK`, e le due scatole
-`DIST` / `RES` mostrano il routing scelto.
+La card `INTERACTION` disegna il loop: le due frecce mostrano quanto è aperto
+ciascun lato (quello in avanti è sempre aperto in `DIST > RES`), e le due
+scatole `DIST` / `RES` mostrano il routing scelto.
 
 ---
 
