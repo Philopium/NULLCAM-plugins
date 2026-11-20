@@ -1,6 +1,6 @@
 # NULLCAM plugins
 
-Six boutique VST3 plugins from the NULLCAM family, built with JUCE 8 and C++17.
+Seven boutique VST3 plugins from the NULLCAM family, built with JUCE and C++17.
 
 | Plugin | What it is | State |
 |---|---|---|
@@ -10,6 +10,7 @@ Six boutique VST3 plugins from the NULLCAM family, built with JUCE 8 and C++17.
 | **GIANNIS-MODE** | Octaver + sub octaver: an analog-style divider feeds two rounded sine subs, plus full-wave rectifier octave up, fuzz, tone, level. Twelve presets from violent dubstep sub to simple fuzzy synthy octaver. The symbol is a big nose ("il nasone"). | ready — Windows + macOS |
 | **EchoMatrixMode** | Echo matrix pattern delay: the 16 steps divide one delay period and each step is a different tap of the delay window — step 1 repeats exactly one delay time later, step 16 almost two — so the pattern really decides which repeats happen. Every tap is an independent repeat with its own level and pan, and a new repeat never disturbs the ones already ringing. Eight presets. | ready — Windows + macOS |
 | **HarmonicResonatorMode** | Interactive distortion and resonance: a nonlinear stage and a bank of eight resonators drive each other in a closed loop, so the harmonics the distortion creates land on the partials and the partials feed the distortion back. Seven shapers, five tunings, three routings, optional pitch tracking. Eight presets. | ready — Windows + macOS |
+| **MemoryGranulatorMode** | Circular-memory granular instrument: capture audio, freeze it, then rebuild it as independent grains whose pitch is controlled by real MIDI or monophonic audio tracking. Eight grain modes, a signed pitch-mapping matrix, harmonic layers, evolving memory feedback and an integrated spatial engine. 99 parameters, eight presets. | ready — Windows + macOS |
 
 Every plugin is a VST3 (plus a Standalone app on Windows). Audio Units are not
 shipped, on purpose: one bundle to install is one thing less to explain.
@@ -25,6 +26,7 @@ SPAMPI-MODE/        plugin 3
 GIANNIS-MODE/       plugin 4
 EchoMatrixMode/     plugin 5
 HarmonicResonatorMode/ plugin 6
+MemoryGranulatorMode/ plugin 7
 tools/              shared build and packaging scripts for macOS
 .github/workflows/  GitHub Actions: macOS VST3 build
 ```
@@ -51,11 +53,13 @@ The same two commands work in `MAURI-MODE` (targets `MauriMode_VST3`,
 `MauriMode_Standalone`), in `SPAMPI-MODE` (targets `SpampiMode_VST3`,
 `SpampiMode_Standalone`), in `GIANNIS-MODE` (targets `GiannisMode_VST3`,
 `GiannisMode_Standalone`), in `EchoMatrixMode` (targets
-`EchoMatrixMode_VST3`, `EchoMatrixMode_Standalone`) and in
+`EchoMatrixMode_VST3`, `EchoMatrixMode_Standalone`), in
 `HarmonicResonatorMode` (targets `HarmonicResonatorMode_VST3`,
-`HarmonicResonatorMode_Standalone`). The bundle is copied after
-the build into `%LOCALAPPDATA%\Programs\Common\VST3` — no administrator rights
-needed — or into the system folder when the build runs elevated.
+`HarmonicResonatorMode_Standalone`) and in `MemoryGranulatorMode` (targets
+`MemoryGranulatorMode_VST3`, `MemoryGranulatorMode_Standalone`). The bundle is
+copied after the build into `%LOCALAPPDATA%\Programs\Common\VST3` — no
+administrator rights needed — or into the system folder when the build runs
+elevated.
 
 The DSP of each plugin is framework-free and has its own test target:
 
@@ -92,11 +96,28 @@ build\harmonicresonator_ui_check_artefacts\Release\harmonicresonator_ui_check.ex
 build\harmonicresonator_vst3_check_artefacts\Release\harmonicresonator_vst3_check.exe
 ```
 
-The DSP test covers the shapers, the resonator bank, the tunings, the
-interaction loop, the pitch tracker and the sample-rate/block-size behaviour;
-the UI check renders the faceplate and round-trips the presets and the state;
-the VST3 check loads the built bundle through JUCE's host code and makes it
-play.
+`MemoryGranulatorMode` has the same three checks plus a portable parameter
+coverage gate:
+
+```powershell
+cmake --build build --config Release --target memorygranulator_dsp_test memorygranulator_ui_check memorygranulator_vst3_check memorygranulator_parameter_coverage_check
+build\Release\memorygranulator_dsp_test.exe
+build\memorygranulator_ui_check_artefacts\Release\memorygranulator_ui_check.exe docs\panel.png 2
+build\memorygranulator_vst3_check_artefacts\Release\memorygranulator_vst3_check.exe
+```
+
+The older plugins' DSP tests cover their shapers, resonator banks, tunings,
+interaction loops, pitch trackers and sample-rate/block-size behaviour; the UI
+checks render the faceplates and round-trip presets and state; the VST3 checks
+load each built bundle through JUCE's host code and make it play.
+
+The MemoryGranulatorMode DSP test covers circular capture, freezing, eight grain
+modes, MIDI polyphony, monophonic tracking, hybrid routing, extreme feedback
+and the common sample rates. Its UI check renders the faceplate and round-trips
+the presets and state; its VST3 check loads the built bundle through JUCE's host
+code and sends real VST3 MIDI events. The coverage gate proves that all 99
+public parameters have one APVTS specification, one visible control and one
+read by the engine.
 
 ---
 
@@ -115,10 +136,10 @@ universal binary.
 ```
 
 The finished artefact is `PIER-MODE-macOS-VST3.zip` (and the same for
-MAURI-MODE, SPAMPI-MODE, GIANNIS-MODE, EchoMatrixMode and
-HarmonicResonatorMode): it contains the
-universal `*.vst3` bundle and `LEGGIMI - installazione macOS.md`, the guide for
-whoever receives it.
+MAURI-MODE, SPAMPI-MODE, GIANNIS-MODE, EchoMatrixMode,
+HarmonicResonatorMode and MemoryGranulatorMode): it contains the
+universal `*.vst3` bundle, the generic macOS installation guide and the
+plugin-specific instructions, including MIDI routing where the plugin needs it.
 
 To produce them:
 
@@ -168,6 +189,7 @@ file per preset, so they survive a reinstall and can be copied around:
 | GIANNIS-MODE | `%APPDATA%\NULLCAM\GIANNIS-MODE\presets` | `~/Library/Application Support/NULLCAM/GIANNIS-MODE/presets` |
 | EchoMatrixMode | `%APPDATA%\NULLCAM\ECHOMATRIX-MODE\presets` | `~/Library/Application Support/NULLCAM/ECHOMATRIX-MODE/presets` |
 | HarmonicResonatorMode | `%APPDATA%\NULLCAM\HARMONIC-RESONATOR-MODE\presets` | `~/Library/Application Support/NULLCAM/HARMONIC-RESONATOR-MODE/presets` |
+| MemoryGranulatorMode | `%APPDATA%\NULLCAM\MEMORY-GRANULATOR-MODE\presets` | `~/Library/Application Support/NULLCAM/MEMORY-GRANULATOR-MODE/presets` |
 
 The DAW project saves the knobs on its own, independently of these files.
 
@@ -203,3 +225,7 @@ the cyan/magenta accents do the talking. HarmonicResonatorMode follows the
 same system-font, near-black-plate rules, with amber (`#ffb340`) accents that
 turn teal (`#3ce0c4`) on the resonant parts of the panel: the live partial
 display and the interaction-loop schematic are the two things that glow.
+MemoryGranulatorMode keeps the near-black system-font treatment on a larger
+1440×1024 plate. Its seven data cards are live engine views: the captured
+waveform and playhead, grain positions, active MIDI notes and tracked pitch,
+harmonic balance, feedback activity, modulation activity and output meters.

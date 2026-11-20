@@ -83,6 +83,7 @@ codesign --force --deep --sign - "$STAGE/$PROJECT.vst3"
 case "$PROJECT" in
     EchoMatrixMode)        PRESET_FOLDER="ECHOMATRIX-MODE" ;;
     HarmonicResonatorMode) PRESET_FOLDER="HARMONIC-RESONATOR-MODE" ;;
+    MemoryGranulatorMode)  PRESET_FOLDER="MEMORY-GRANULATOR-MODE" ;;
     *)                     PRESET_FOLDER="$PROJECT" ;;
 esac
 
@@ -90,6 +91,13 @@ esac
 sed -e "s/PLUGIN_NAME/$PROJECT/g" -e "s/PRESET_FOLDER/$PRESET_FOLDER/g" \
     "$ROOT/tools/MAC-INSTALL.md" \
     > "$STAGE/LEGGIMI - installazione macOS.md"
+
+# Keep the plugin-specific guide in the archive as well. For instruments with
+# a MIDI bus this is where Ableton routing, first steps and troubleshooting live.
+PLUGIN_GUIDE="LEGGIMI - istruzioni $PROJECT.md"
+if [ -f "$ROOT/$PROJECT/INSTALLAZIONE.md" ]; then
+    cp "$ROOT/$PROJECT/INSTALLAZIONE.md" "$STAGE/$PLUGIN_GUIDE"
+fi
 
 # The licence text travels with the binary, as the AGPLv3 asks for.
 cp "$ROOT/LICENSE.md" "$STAGE/LICENZA - AGPLv3.md"
@@ -99,9 +107,17 @@ mkdir -p "$OUT"
 OUT="$(cd "$OUT" && pwd)"
 rm -f "$OUT/$PROJECT-macOS-VST3.zip"
 
+archive_items=(
+    "$PROJECT.vst3"
+    "LEGGIMI - installazione macOS.md"
+    "LICENZA - AGPLv3.md"
+)
+
+if [ -f "$STAGE/$PLUGIN_GUIDE" ]; then
+    archive_items+=("$PLUGIN_GUIDE")
+fi
+
 ( cd "$STAGE" && zip -r -y "$OUT/$PROJECT-macOS-VST3.zip" \
-    "$PROJECT.vst3" \
-    "LEGGIMI - installazione macOS.md" \
-    "LICENZA - AGPLv3.md" > /dev/null )
+    "${archive_items[@]}" > /dev/null )
 
 echo ">>> $OUT/$PROJECT-macOS-VST3.zip"
