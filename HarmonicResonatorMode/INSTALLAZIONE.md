@@ -53,9 +53,11 @@ LEGGIMI - installazione.md              questo file
    del loop fra la distorsione e la banca di risonatori. Parti da metà e alzalo:
    quando è chiuso, il loop si autoalimenta e la nota continua a suonare anche
    dopo che hai smesso di suonarla.
-3. `ROUTING` sceglie il percorso. `RES < > DIST` è il loop chiuso (il default):
-   le armoniche della distorsione cadono sui partiali e i partiali tornano
-   indietro. Con `DIST > RES` senti solo la distorsione che alimenta la banca.
+3. `ROUTING` sceglie il percorso. `DIST > RES` è il default: la distorsione
+   spinge la banca sempre, e il ritorno è l'unica cosa che `INTERACTION`
+   governa. `RES > DIST` e `RES < > DIST` fanno passare anche l'ingresso
+   pulito dentro la banca, e governano l'accoppiamento in entrambe le
+   direzioni.
 4. `TUNING` sceglie la serie dei partiali: `HARMONIC` (220, 440, 660...),
    `ODD`, `EVEN`, `CHORD`, `METALLIC` (inharmonica, da campana).
 5. `ALIGN` fa seguire alla banca la nota che stai suonando: con l'armonica
@@ -100,8 +102,8 @@ o `GLASS HARMONICS`.
 **Il loop mi sfugge di mano / diventa un rumore.**
 È normale: con `INTERACTION` e `FEEDBACK` alti il loop è chiuso e si
 autoalimenta. Non è un bug, è il comando. Per tornare sotto controllo abbassa
-`FEEDBK` o `FB DRIVE`, oppure apri il loop con `ROUTING > DIST > RES`. Il
-livello resta sempre limitato.
+`FEEDBK` o `FB DRIVE`, oppure azzera `INTERACT`: a zero non torna niente
+indietro e il loop è aperto. Il livello resta sempre limitato.
 
 **La coda viene "risweptata" quando finisce la nota.**
 Dovrebbe già succedere: il tracker tiene la confidenza per qualche secondo. Se

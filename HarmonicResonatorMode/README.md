@@ -17,11 +17,17 @@ quello che esce dalla banca viene reiniettato nello stadio di distorsione, e
 viceversa.
 
 - `INTERACTION` **non è un wet/dry**: è la quantità di segnale che fa il giro
-  del loop. A zero il plugin è una catena lineare, a 100 il loop è chiuso e
-  la nota si autoalimenta.
+  del loop. A zero non torna niente indietro (la catena è semplice), a 100 il
+  loop è chiuso e la nota si autoalimenta.
 - `FEEDBACK` decide quanto del ritorno viene tenuto nel giro.
-- `ROUTING` sceglie il percorso: `DIST > RES` (solo in avanti), `RES > DIST`
-  (solo la banca torna indietro) o `RES < > DIST` (il loop chiuso, il default).
+- `ROUTING` sceglie il percorso:
+  - `DIST > RES` — la distorsione spinge la banca **sempre**: l'accoppiamento
+    non tocca il passaggio in avanti, governa solo quanto torna indietro.
+    È il default.
+  - `RES > DIST` — anche il passaggio in avanti passa per l'accoppiamento, e
+    l'ingresso pulito entra direttamente nella banca.
+  - `RES < > DIST` — come il precedente, ma con un mix diverso: più
+    distorsione e più banco nel wet.
 - `FB SOURCE` sceglie **cosa** viene reiniettato: la banca, la distorsione, il
   segnale pulito, la somma dei due o solo la banda.
 - `FB DEST` sceglie **dove** il ritorno atterra: in entrambi gli stadi, solo
@@ -44,7 +50,7 @@ Il percorso globale è:
 |---|---|
 | `SHAPE` | la curva: `SOFT`, `HARD`, `FOLD`, `ASYM`, `CHEBY`, `CRUSH`, `RING` |
 | `DRIVE` | quanto il segnale viene spinto dentro la curva |
-| `DENSITY` | quante armoniche la curva genera (`CHEBY` sceglie anche l'ordine) |
+| `DENSITY` | quanto in alto arrivano le armoniche (`CHEBY` sceglie anche l'ordine) |
 | `BRIGHT` | tilt del tono dopo la distorsione |
 | `EVEN / ODD` | bilancia le armoniche pari e dispari |
 | `SYMMETRY` | quanto le due metà della curva sono diverse |
@@ -57,12 +63,12 @@ il valore assoluto del segnale, quindi è pari per costruzione.
 
 | Comando | Cosa fa |
 |---|---|
-| `TUNING` | `HARMONIC`, `ODD`, `EVEN`, `CHORD`, `METALLIC` |
+| `TUNING` | `HARMONIC` (1, 2, 3…), `ODD` (1, 3, 5…), `EVEN` (2, 4, 6…), `CHORD` (1, 1.25, 1.5, 2, 2.5, 3, 4, 6), `METALLIC` (1, 1.47, 2.09, 2.56, 3.31, 4.13, 5.07, 6.21) |
 | `TUNE` | la frequenza base della banca |
 | `RESO` | quanto i partiali sono selettivi (il Q) |
 | `DECAY` | quanto tempo suona ogni partial (T60) |
 | `BANK` | il livello della banca |
-| `SPREAD` | quanto i partiali si allontanano dalla serie Armonica |
+| `SPREAD` | quanto è aperto stereo il banco: i partiali alternati a sinistra e a destra |
 | `ALIGN` | fa seguire la base della banca alla nota che suona |
 
 `ALIGN` usa un tracker di pitch (autocorrelazione su un segnale decimato): la
@@ -73,7 +79,7 @@ anche quando la nota finisce, così la coda non viene risweptata.
 
 | Comando | Cosa fa |
 |---|---|
-| `ROUTING` | `DIST > RES`, `RES > DIST`, `RES < > DIST` |
+| `ROUTING` | `DIST > RES` (default), `RES > DIST`, `RES < > DIST` |
 | `INTERACT` | quanto segnale fa il giro del loop |
 | `FEEDBK` | quanto ritorno viene tenuto |
 | `FB DRIVE` | saturazione sul ritorno |
@@ -85,8 +91,8 @@ anche quando la nota finisce, così la coda non viene risweptata.
 
 | Comando | Cosa fa |
 |---|---|
-| sorgente | `LFO`, `RANDOM`, `S & H`, `ENVELOPE` |
-| destinazione | `TUNE`, `RESONANCE`, `DECAY`, `DRIVE`, `INTERACTION`, `PAN` |
+| `MOD SOURCE` | `LFO`, `RANDOM`, `S & H`, `ENVELOPE` |
+| `MOD DEST` | `TUNE`, `RESONANCE`, `DECAY`, `DRIVE`, `INTERACTION`, `PAN` |
 | `RATE` | velocità della modulazione |
 | `DEPTH` | quanto la modulazione muove la destinazione |
 | `ENV>DRV` | quanto l'inviluppo del segnale spinge il drive |
@@ -97,7 +103,7 @@ anche quando la nota finisce, così la coda non viene risweptata.
 |---|---|
 | `INPUT` / `OUTPUT` | gain di ingresso e di uscita, in dB |
 | `DRY / WET` | equilibrio fra il segnale pulito e il trattamento |
-| `FUNDAMENTAL` | l'inviluppo segue la fondamentale (0 = lo segue sempre) |
+| `FUNDAMENTAL` | rinforza la fondamentale dell'ingresso nel wet: una copia passa-bassa del segnale pulito aggiunta alla somma dei due stadi |
 
 Tutti i comandi sono automatizzabili e finiscono nel progetto della DAW.
 
