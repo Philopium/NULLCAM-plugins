@@ -30,7 +30,8 @@ tools/              shared build and packaging scripts for macOS
 ```
 
 Each plugin is self-contained: its own `CMakeLists.txt`, its own engine, its own
-tests, its own fonts. `tools/` only knows how to build and pack them for macOS.
+tests, its own fonts where it needs them. `tools/` only knows how to build and
+pack them for macOS.
 
 ---
 
