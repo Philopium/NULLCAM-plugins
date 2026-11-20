@@ -134,8 +134,9 @@ ripetizione nuova non altera quelle già in corso, il passaggio da una
 ripetizione alla successiva è senza click, un passo spento sfuma senza click,
 il pan resta stereo, il feedback continua a suonare, il mix a zero è un
 pass-through pulito, il sync segue il tempo del host, il silenzio resta
-silenzio, il risultato non cambia con la dimensione del blocco audio, l'output
-non diventa mai NaN e il pool di voci non cresce oltre 64.
+silenzio, il risultato non cambia con la dimensione del blocco audio, la
+ripetizione arriva al posto giusto a 44.1, 48, 88.2 e 96 kHz, l'output non
+diventa mai NaN e il pool di voci non cresce oltre 64.
 
 Per vedere il pannello senza DAW (e verificare preset, stato e read-out):
 
@@ -162,7 +163,7 @@ e il delay ripete davvero.
 Source/EchoMatrixEngine.h  motore: memoria, matrice di tap, sequenziale, voci indipendenti, feedback (nessuna dipendenza da JUCE)
 Source/PluginProcessor.*   parametri, 8 preset factory, preset XML utente, stato, BPM del host
 Source/PluginEditor.*      il pannello (Look and Feel, manopole, 16 pad, step editor, meter)
-tests/dsp_test.cpp          test del motore (30 controlli)
+tests/dsp_test.cpp          test del motore (34 controlli)
 tests/ui_check.cpp          render del pannello + round trip preset/stato + read-out
 tests/vst3_check.cpp        il VST3 costruito, caricato e fatto suonare
 ```

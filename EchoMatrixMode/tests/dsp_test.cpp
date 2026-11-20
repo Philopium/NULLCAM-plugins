@@ -584,6 +584,29 @@ int main()
     }
 
     //--------------------------------------------------------------------------
+    // The common sample rates all work, and the repeat lands where it should.
+    {
+        for (const auto sampleRate : { 44100.0, 48000.0, 88200.0, 96000.0 })
+        {
+            echomatrix::Engine engine;
+            engine.prepare (sampleRate);
+            engine.setSettings (baseSettings());
+
+            const auto input = click ((int) (sampleRate * 1.0));
+            const auto output = run (engine, input, sampleRate, 64);
+
+            const auto expected = (int) (0.25 * sampleRate);
+            const auto found = firstAudibleSample (output.left);
+
+            std::printf ("at %.0f Hz the repeat lands at sample %d, expected %d\n",
+                         sampleRate, found, expected);
+
+            check (found >= expected - 64 && found <= expected + 64,
+                   "the repeat lands right at every common sample rate");
+        }
+    }
+
+    //--------------------------------------------------------------------------
     // The pool is bounded and the audio never explodes.
     {
         echomatrix::Engine engine;
