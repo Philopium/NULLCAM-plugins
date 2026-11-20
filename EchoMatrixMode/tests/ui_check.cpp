@@ -101,10 +101,12 @@ juce::String sliderText (juce::Slider& slider)
 }
 
 // A short phrase, to make the panel show something alive.
-void playPhrase (EchoMatrixModeAudioProcessor& processor, double seconds)
+// It returns the loudest sample that came out.
+float playPhrase (EchoMatrixModeAudioProcessor& processor, double seconds)
 {
     const auto blockSize = 512;
     const auto blocks = (int) (seconds * 48000.0 / blockSize);
+    float peak = 0.0f;
 
     juce::AudioBuffer<float> buffer (2, blockSize);
     juce::MidiBuffer midi;
@@ -128,7 +130,13 @@ void playPhrase (EchoMatrixModeAudioProcessor& processor, double seconds)
         }
 
         processor.processBlock (buffer, midi);
+
+        for (int channel = 0; channel < 2; ++channel)
+            for (int i = 0; i < blockSize; ++i)
+                peak = std::max (peak, std::abs (buffer.getSample (channel, i)));
     }
+
+    return peak;
 }
 
 } // namespace
@@ -206,6 +214,30 @@ int main (int argc, char* argv[])
 
         check (std::abs (paramValue (processor, ids::feedback) - before) < 1.0e-4f,
                "the plugin state restores the feedback setting");
+    }
+
+    //--------------------------------------------------------------------------
+    // Every factory preset makes a sound, and no preset blows up.
+    {
+        processor.prepareToPlay (48000.0, 512);
+
+        bool allGood = true;
+
+        for (int i = 0; i < EchoMatrixModeAudioProcessor::kNumPresets; ++i)
+        {
+            processor.applyPreset ((EchoMatrixModeAudioProcessor::Preset) i);
+
+            const auto peak = playPhrase (processor, 2.0);
+            const auto name = EchoMatrixModeAudioProcessor::getFactoryPresetName (
+                (EchoMatrixModeAudioProcessor::Preset) i);
+
+            std::cout << "  " << name << ": peak " << peak << "\n";
+
+            if (peak < 0.02f || peak > 0.99f)
+                allGood = false;
+        }
+
+        check (allGood, "every factory preset makes a sound and stays inside the rails");
     }
 
     //--------------------------------------------------------------------------
