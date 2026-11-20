@@ -1,6 +1,6 @@
 # NULLCAM plugins
 
-Five boutique VST3 plugins from the NULLCAM family, built with JUCE 8 and C++17.
+Six boutique VST3 plugins from the NULLCAM family, built with JUCE 8 and C++17.
 
 | Plugin | What it is | State |
 |---|---|---|
@@ -9,6 +9,7 @@ Five boutique VST3 plugins from the NULLCAM family, built with JUCE 8 and C++17.
 | **SPAMPI-MODE** | Pitch-following record player: real CC0 recordings are cut at their loudest moment and re-pitched by the pitch detected in real time from your input audio, one hit per note, with no MIDI involved. | ready — Windows + macOS |
 | **GIANNIS-MODE** | Octaver + sub octaver: an analog-style divider feeds two rounded sine subs, plus full-wave rectifier octave up, fuzz, tone, level. Twelve presets from violent dubstep sub to simple fuzzy synthy octaver. The symbol is a big nose ("il nasone"). | ready — Windows + macOS |
 | **EchoMatrixMode** | Echo matrix pattern delay: the 16 steps divide one delay period and each step is a different tap of the delay window — step 1 repeats exactly one delay time later, step 16 almost two — so the pattern really decides which repeats happen. Every tap is an independent repeat with its own level and pan, and a new repeat never disturbs the ones already ringing. Eight presets. | ready — Windows + macOS |
+| **HarmonicResonatorMode** | Interactive distortion and resonance: a nonlinear stage and a bank of eight resonators drive each other in a closed loop, so the harmonics the distortion creates land on the partials and the partials feed the distortion back. Seven shapers, five tunings, three routings, optional pitch tracking. Eight presets. | ready — Windows + macOS |
 
 Every plugin is a VST3 (plus a Standalone app on Windows). Audio Units are not
 shipped, on purpose: one bundle to install is one thing less to explain.
@@ -23,6 +24,7 @@ MAURI-MODE/         plugin 2
 SPAMPI-MODE/        plugin 3
 GIANNIS-MODE/       plugin 4
 EchoMatrixMode/     plugin 5
+HarmonicResonatorMode/ plugin 6
 tools/              shared build and packaging scripts for macOS
 .github/workflows/  GitHub Actions: macOS VST3 build
 ```
@@ -47,8 +49,10 @@ cmake --build build --config Release --target NullcamChain_VST3 NullcamChain_Sta
 The same two commands work in `MAURI-MODE` (targets `MauriMode_VST3`,
 `MauriMode_Standalone`), in `SPAMPI-MODE` (targets `SpampiMode_VST3`,
 `SpampiMode_Standalone`), in `GIANNIS-MODE` (targets `GiannisMode_VST3`,
-`GiannisMode_Standalone`) and in `EchoMatrixMode` (targets
-`EchoMatrixMode_VST3`, `EchoMatrixMode_Standalone`). The bundle is copied after
+`GiannisMode_Standalone`), in `EchoMatrixMode` (targets
+`EchoMatrixMode_VST3`, `EchoMatrixMode_Standalone`) and in
+`HarmonicResonatorMode` (targets `HarmonicResonatorMode_VST3`,
+`HarmonicResonatorMode_Standalone`). The bundle is copied after
 the build into `%LOCALAPPDATA%\Programs\Common\VST3` — no administrator rights
 needed — or into the system folder when the build runs elevated.
 
@@ -78,6 +82,21 @@ cmake --build build --config Release --target echomatrix_vst3_check
 build\echomatrix_vst3_check_artefacts\Release\echomatrix_vst3_check.exe
 ```
 
+`HarmonicResonatorMode` has the same three targets, with its own names:
+
+```powershell
+cmake --build build --config Release --target harmonicresonator_dsp_test harmonicresonator_ui_check harmonicresonator_vst3_check
+build\Release\harmonicresonator_dsp_test.exe
+build\harmonicresonator_ui_check_artefacts\Release\harmonicresonator_ui_check.exe docs\panel.png 2
+build\harmonicresonator_vst3_check_artefacts\Release\harmonicresonator_vst3_check.exe
+```
+
+The DSP test covers the shapers, the resonator bank, the tunings, the
+interaction loop, the pitch tracker and the sample-rate/block-size behaviour;
+the UI check renders the faceplate and round-trips the presets and the state;
+the VST3 check loads the built bundle through JUCE's host code and makes it
+play.
+
 ---
 
 ## Building macOS from a Windows machine
@@ -95,7 +114,8 @@ universal binary.
 ```
 
 The finished artefact is `PIER-MODE-macOS-VST3.zip` (and the same for
-MAURI-MODE, SPAMPI-MODE, GIANNIS-MODE and EchoMatrixMode): it contains the
+MAURI-MODE, SPAMPI-MODE, GIANNIS-MODE, EchoMatrixMode and
+HarmonicResonatorMode): it contains the
 universal `*.vst3` bundle and `LEGGIMI - installazione macOS.md`, the guide for
 whoever receives it.
 
@@ -146,6 +166,7 @@ file per preset, so they survive a reinstall and can be copied around:
 | SPAMPI-MODE | `%APPDATA%\NULLCAM\SPAMPI-MODE\presets` | `~/Library/Application Support/NULLCAM/SPAMPI-MODE/presets` |
 | GIANNIS-MODE | `%APPDATA%\NULLCAM\GIANNIS-MODE\presets` | `~/Library/Application Support/NULLCAM/GIANNIS-MODE/presets` |
 | EchoMatrixMode | `%APPDATA%\NULLCAM\ECHOMATRIX-MODE\presets` | `~/Library/Application Support/NULLCAM/ECHOMATRIX-MODE/presets` |
+| HarmonicResonatorMode | `%APPDATA%\NULLCAM\HARMONIC-RESONATOR-MODE\presets` | `~/Library/Application Support/NULLCAM/HARMONIC-RESONATOR-MODE/presets` |
 
 The DAW project saves the knobs on its own, independently of these files.
 
@@ -177,4 +198,7 @@ the gummy **Bagel Fat One** with rainbow accents; GIANNIS-MODE mixes Bagel Fat
 One, Rowdies and Titan One around a big nose — the "nasone" — drawn in the
 left card of the panel. EchoMatrixMode goes the other way: no bundled fonts at
 all, only the system ones, on a near-black plate where the 16-step grid and
-the cyan/magenta accents do the talking.
+the cyan/magenta accents do the talking. HarmonicResonatorMode follows the
+same system-font, near-black-plate rules, with amber (`#ffb340`) accents that
+turn teal (`#3ce0c4`) on the resonant parts of the panel: the live partial
+display and the interaction-loop schematic are the two things that glow.
