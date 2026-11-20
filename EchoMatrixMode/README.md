@@ -64,7 +64,7 @@ Clicca un pad per selezionarlo e modificarlo.
 | `PAN` (per passo) | posizione stereo della ripetizione: `L`, `C` o `R` |
 
 Lo step editor dice in chiaro **dove cade** il passo scelto: `REPEATS 562 MS AFTER
-THE INPUT` e `TAP 9 OF 16 - 187 MS INSIDE THE WINDOW`.
+THE INPUT` e `TAP 9 OF 16 - 23 MS FROM THE PREVIOUS TAP`.
 
 Il pannello mostra in tempo reale quante ripetizioni stanno suonando
 (`ACTIVE REPEATS`), il livello del riverbero (`WET`) e la posizione nel pattern

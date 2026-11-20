@@ -55,7 +55,7 @@ LEGGIMI - installazione.md       questo file
    generano ripetizioni: accendine qualcuno e ascolta come la grana si apre.
 3. Clicca un pad per selezionarlo: a destra trovi `LEVEL` e `PAN` di quel passo,
    e le due righe sotto ti dicono **quando** suona quel passo (`REPEATS ... MS
-   AFTER THE INPUT` e `TAP ... OF 16` dentro la finestra di delay).
+   AFTER THE INPUT` e `TAP ... OF 16 - ... MS FROM THE PREVIOUS TAP`).
    Ogni passo è una voce a sé, quindi un passo a sinistra e uno a destra si
    sentono davvero separati.
 4. `FEEDBK` tiene vivo il riverbero, `MIX` decide quanto entra nel mix finale.
